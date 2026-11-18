@@ -109,6 +109,11 @@ builder.Services.Configure<AgentIdentityOptions>(builder.Configuration.GetSectio
 builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.SectionName));
 builder.Services.Configure<ActivationOptions>(builder.Configuration.GetSection(ActivationOptions.SectionName));
 builder.Services.Configure<UpdateOptions>(builder.Configuration.GetSection(UpdateOptions.SectionName));
+builder.Services.Configure<CloudOrc.ControlAgent.Sync.SyncOptions>(builder.Configuration.GetSection(CloudOrc.ControlAgent.Sync.SyncOptions.SectionName));
+
+var syncOptions =
+    builder.Configuration.GetSection(CloudOrc.ControlAgent.Sync.SyncOptions.SectionName).Get<CloudOrc.ControlAgent.Sync.SyncOptions>()
+    ?? new CloudOrc.ControlAgent.Sync.SyncOptions();
 
 var backupOptions =
     builder.Configuration.GetSection(BackupOptions.SectionName).Get<BackupOptions>()
@@ -316,6 +321,25 @@ if (backendOptions.Enabled)
         builder.Services.AddSingleton<ITypedCommandHandler, MaintenanceHandler>();
         builder.Services.AddSingleton<ITypedCommandHandler, RestoreExecuteHandler>();
         builder.Services.AddSingleton<ITypedCommandHandler, DiscoveryBrowseHandler>();
+    }
+
+    if (syncOptions.Enabled)
+    {
+        // ---- AikySpace one-way selective sync (spec §08). Own SQLite file + own hosted service:
+        // independent of backup jobs, never blocks them, rollback-safe (see SyncDatabase).
+        builder.Services.AddSingleton(sp => new CloudOrc.ControlAgent.Sync.SyncDatabase(
+            Path.Combine(Path.GetDirectoryName(sp.GetRequiredService<BackupPaths>().StateDatabase)!, "sync.db"),
+            sp.GetRequiredService<ILogger<CloudOrc.ControlAgent.Sync.SyncDatabase>>()));
+        builder.Services.AddSingleton<CloudOrc.ControlAgent.Sync.SyncStore>();
+        builder.Services.AddSingleton<CloudOrc.ControlAgent.Sync.SyncTransport>();
+        builder.Services.AddSingleton<CloudOrc.ControlAgent.Sync.SyncCoordinator>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudOrc.ControlAgent.Sync.SyncCoordinator>());
+        builder.Services.AddSingleton<ITypedCommandHandler, SyncPolicyApplyHandler>();
+        builder.Services.AddSingleton<ITypedCommandHandler, SyncPolicyRemoveHandler>();
+        builder.Services.AddSingleton<ITypedCommandHandler, SyncPauseHandler>();
+        builder.Services.AddSingleton<ITypedCommandHandler, SyncResumeHandler>();
+        builder.Services.AddSingleton<ITypedCommandHandler, SyncRescanHandler>();
+        builder.Services.AddSingleton<ITypedCommandHandler, SyncRevokeHandler>();
     }
 
     builder.Services.AddHostedService(sp => new BackendConnectionService(

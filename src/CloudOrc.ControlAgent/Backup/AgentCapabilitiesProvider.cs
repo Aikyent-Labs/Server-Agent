@@ -13,7 +13,7 @@ namespace CloudOrc.ControlAgent.Backup;
 /// </summary>
 public sealed class AgentCapabilitiesProvider : IAgentCapabilitiesProvider
 {
-    public AgentCapabilitiesProvider(IOptions<BackupOptions> options, BackupPaths paths)
+    public AgentCapabilitiesProvider(IOptions<BackupOptions> options, BackupPaths paths, IOptions<Sync.SyncOptions>? syncOptions = null)
     {
         var caps = new List<string>
         {
@@ -38,6 +38,12 @@ public sealed class AgentCapabilitiesProvider : IAgentCapabilitiesProvider
         {
             caps.Add(AgentCapabilities.BackupV1);
             caps.Add(AgentCapabilities.RestoreV1);
+        }
+
+        if (syncOptions?.Value.Enabled == true)
+        {
+            // AikySpace one-way selective sync (sync.* typed commands + api/v1/sync control plane)
+            caps.Add(Agent.Contracts.Sync.SyncCapabilities.SyncV1);
         }
 
         Capabilities = caps;

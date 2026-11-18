@@ -112,6 +112,10 @@ public sealed class BackendApiClient : IDisposable
     public Task<ApiResponse> PostJsonStringAsync(string route, string json, CancellationToken cancellationToken) =>
         SendAsync(route, () => new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken);
 
+    /// <summary>GET with the same credential / retry semantics (sync: refresh upload part grants).</summary>
+    public Task<ApiResponse> GetAsync(string route, CancellationToken cancellationToken) =>
+        SendAsync(route, null, cancellationToken, HttpMethod.Get);
+
     /// <summary>Streams a (pre-gzipped) file body - used for the recovery-point manifest.</summary>
     public Task<ApiResponse> PostFileAsync(string route, string filePath, string contentType, bool gzipEncoded, CancellationToken cancellationToken) =>
         SendAsync(route, () =>
@@ -126,15 +130,15 @@ public sealed class BackendApiClient : IDisposable
             return content;
         }, cancellationToken);
 
-    private async Task<ApiResponse> SendAsync(string route, Func<HttpContent> contentFactory, CancellationToken cancellationToken)
+    private async Task<ApiResponse> SendAsync(string route, Func<HttpContent>? contentFactory, CancellationToken cancellationToken, HttpMethod? method = null)
     {
         if (BaseAddress is null)
         {
             return new ApiResponse(null, null, null, "Control-plane address is not configured (agent not enrolled?).");
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(BaseAddress, route));
-        using var content = contentFactory();
+        using var request = new HttpRequestMessage(method ?? HttpMethod.Post, new Uri(BaseAddress, route));
+        using var content = contentFactory?.Invoke();
         request.Content = content;
 
         var credential = _credentials.Current;

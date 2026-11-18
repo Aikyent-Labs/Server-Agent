@@ -74,7 +74,7 @@ public sealed class TypedCommandDispatcher : ITypedCommandRouter
 
     public bool TryRoute(string json, string? commandType)
     {
-        if (!BackupCommandTypes.IsTyped(commandType))
+        if (!BackupCommandTypes.IsTyped(commandType) && !Agent.Contracts.Sync.SyncCommandTypes.IsSync(commandType))
         {
             return false;
         }
