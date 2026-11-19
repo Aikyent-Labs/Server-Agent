@@ -36,6 +36,12 @@
     </None>
   </ItemGroup>
 
+  <!-- Authenticode check of the Backup Agent setup (agent.backup-agent.install) - same code as the updater. -->
+  <ItemGroup>
+    <Compile Include="..\CloudOrc.Agent.Updater\AuthenticodeVerifier.cs" Link="Shared\AuthenticodeVerifier.cs" />
+    <Compile Include="..\CloudOrc.Agent.Updater\Abstractions.cs" Link="Shared\UpdaterAbstractions.cs" />
+  </ItemGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="CloudOrc.ControlAgent.Tests" />
   </ItemGroup>

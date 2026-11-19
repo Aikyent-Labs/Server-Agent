@@ -27,6 +27,16 @@ public sealed class AgentCapabilitiesProvider : IAgentCapabilitiesProvider
             caps.Add(AgentCapabilities.SignedUpdateV1);
         }
 
+        if (OperatingSystem.IsWindows())
+        {
+            caps.Add(AgentCapabilities.BackupAgentInstallV1);
+        }
+
+        if (BackupAgentPresence.IsInstalled())
+        {
+            caps.Add(AgentCapabilities.BackupDelegatedV1);
+        }
+
         if (options.Value.Enabled)
         {
             // discovery.browse is registered with the backup handlers (folder picker).

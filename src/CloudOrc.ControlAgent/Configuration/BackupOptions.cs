@@ -12,6 +12,13 @@ public sealed class BackupOptions
     /// <summary>Master switch for the backup capability (also gates the "backup.v1" HELLO capability).</summary>
     public bool Enabled { get; set; } = true;
 
+    /// <summary>
+    /// When the separate CloudOrc Backup Agent is installed on this server (service
+    /// "CloudOrcBackupAgent"), this Control Agent stops doing backup itself and no longer advertises
+    /// backup.v1, so exactly one agent backs the server up. Default on.
+    /// </summary>
+    public bool DeferToBackupAgent { get; set; } = true;
+
     /// <summary>Full path to CloudOrc.BackupWorker.exe. Default: ..\BackupWorker\ next to the Control Agent folder.</summary>
     public string? WorkerExecutablePath { get; set; }
 

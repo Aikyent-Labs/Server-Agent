@@ -48,10 +48,13 @@ public static class BackupCommandTypes
     /// </summary>
     public const string DiscoveryBrowse = "discovery.browse";
 
+    /// <summary>Installs the separate CloudOrc Backup Agent on this server (zero-touch, CloudOrc VPS).</summary>
+    public const string BackupAgentInstall = "agent.backup-agent.install";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         PolicyApply, PolicyRemove, Run, Cancel, Verify, Maintenance, RestoreExecute, AgentUpdate, AgentCredentialRenew, AgentCertificateRenew,
-        DiscoveryBrowse
+        DiscoveryBrowse, BackupAgentInstall
     };
 
     public static bool IsTyped(string? commandType) => commandType is not null && All.Contains(commandType);
@@ -67,6 +70,12 @@ public static class AgentCapabilities
     public const string SignedUpdateV1 = "signed-update.v1";
     public const string DurableEventsV1 = "durable-events.v1";
     public const string DiscoveryV1 = "discovery.v1";
+
+    /// <summary>Can install the separate CloudOrc Backup Agent (agent.backup-agent.install).</summary>
+    public const string BackupAgentInstallV1 = "backup-agent-install.v1";
+
+    /// <summary>Backup on this server is done by the separate CloudOrc Backup Agent, not by this agent.</summary>
+    public const string BackupDelegatedV1 = "backup.delegated.v1";
 }
 
 /// <summary>Version of every backup event/command schema produced by this agent build.</summary>

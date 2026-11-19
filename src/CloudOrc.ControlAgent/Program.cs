@@ -119,6 +119,14 @@ var backupOptions =
     builder.Configuration.GetSection(BackupOptions.SectionName).Get<BackupOptions>()
     ?? new BackupOptions();
 
+// Two separate products: when the CloudOrc Backup Agent is installed here, backup is its job.
+var backupDelegated = backupOptions.Enabled && backupOptions.DeferToBackupAgent && BackupAgentPresence.IsInstalled();
+if (backupDelegated)
+{
+    backupOptions.Enabled = false;
+    builder.Services.PostConfigure<BackupOptions>(o => o.Enabled = false);
+}
+
 var controlAgentOptions =
     builder.Configuration.GetSection(ControlAgentOptions.SectionName).Get<ControlAgentOptions>()
     ?? new ControlAgentOptions();
@@ -289,6 +297,7 @@ if (backendOptions.Enabled)
     builder.Services.AddSingleton<ITypedCommandRouter>(sp => sp.GetRequiredService<TypedCommandDispatcher>());
     builder.Services.AddSingleton<ITypedCommandHandler, AgentUpdateHandler>();
     builder.Services.AddSingleton<ITypedCommandHandler, CredentialRenewHandler>();
+    builder.Services.AddSingleton<ITypedCommandHandler, BackupAgentInstallHandler>();
 
     if (backupOptions.Enabled)
     {
@@ -375,6 +384,10 @@ try
     Log.Information(
         "CloudOrc Control Agent starting. Data directory: {DataDirectory}. LocalFileMode={LocalFileMode}, BackendConnection={BackendEnabled}, Enrolled={Enrolled}.",
         controlAgentOptions.DataDirectory, controlAgentOptions.LocalFileModeEnabled, backendOptions.Enabled, backendUrlIsFromEnrollment);
+    if (backupDelegated)
+    {
+        Log.Information("The CloudOrc Backup Agent is installed on this server - backup is handled by it, not by the Control Agent.");
+    }
     host.Run();
 }
 finally
