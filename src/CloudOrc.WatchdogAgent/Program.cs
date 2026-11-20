@@ -52,6 +52,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ControlAgentServiceManager>();
 builder.Services.AddSingleton<ControlAgentHealthClient>();
 builder.Services.AddSingleton<WatchdogResourceMonitors>();
+builder.Services.AddSingleton<AgentMetricsFile>();
 builder.Services.AddSingleton<ConsecutiveFailureTracker>();
 builder.Services.AddSingleton<RecoveryRateLimiter>();
 

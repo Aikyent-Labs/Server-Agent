@@ -23,6 +23,7 @@ public sealed class WatchdogMonitorService(
     ConsecutiveFailureTracker failureTracker,
     RecoveryRateLimiter rateLimiter,
     WatchdogResourceMonitors resourceMonitors,
+    AgentMetricsFile metricsFile,
     ILogger<WatchdogMonitorService> logger) : BackgroundService
 {
     private readonly WatchdogOptions _options = options.Value;
@@ -83,7 +84,7 @@ public sealed class WatchdogMonitorService(
             logger.LogWarning("Health check did not get a response from the Control Agent.");
         }
 
-        LogResourceUsage();
+        LogResourceUsage(serviceStatus?.ToString() ?? "NotInstalled", health?.Status);
 
         if (healthy)
         {
@@ -117,10 +118,11 @@ public sealed class WatchdogMonitorService(
     /// while still using an unexpectedly large or growing amount of memory, which this
     /// line is what would surface.
     /// </summary>
-    private void LogResourceUsage()
+    private void LogResourceUsage(string serviceState, string? health)
     {
         var controlAgent = resourceMonitors.ControlAgent.Sample();
         var self = resourceMonitors.Self.Sample();
+        metricsFile.Write(serviceState, health, controlAgent, self);
 
         logger.LogInformation(
             "Resource usage: ControlAgent [{ControlAgentUsage}]; WatchdogAgent (self) [{WatchdogUsage}].",

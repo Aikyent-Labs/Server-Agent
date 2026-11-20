@@ -44,6 +44,7 @@ public sealed class BackupAgentInstallParameters
 public sealed partial class BackupAgentInstallHandler(
     BackupPaths paths,
     IOptions<ControlAgentOptions> agentOptions,
+    IOptions<CloudOrc.ControlAgent.Updates.UpdateOptions> updateOptions,
     ILogger<BackupAgentInstallHandler> logger) : ITypedCommandHandler
 {
     private const long MaxPackageBytes = 400L * 1024 * 1024;
@@ -80,10 +81,19 @@ public sealed partial class BackupAgentInstallHandler(
                 return TypedCommandDispatcher.Rejected("BACKUP_AGENT_PACKAGE_REJECTED", downloadError);
             }
 
-            var signature = new CloudOrc.Agent.Updater.AuthenticodeVerifier().Verify(setup);
-            if (!signature.IsValid)
+            // Update:AllowUnsigned (testing only, same switch as agent updates): the SHA-256 from the
+            // backend-signed command is still enforced above; only the Authenticode check is skipped.
+            if (updateOptions.Value.AllowUnsigned)
             {
-                return TypedCommandDispatcher.Rejected("BACKUP_AGENT_SIGNATURE_INVALID", signature.Reason ?? "The setup is not validly signed.");
+                logger.LogWarning("Backup Agent install {InstallId}: Authenticode verification DISABLED by configuration (testing only).", p.InstallId);
+            }
+            else
+            {
+                var signature = new CloudOrc.Agent.Updater.AuthenticodeVerifier().Verify(setup);
+                if (!signature.IsValid)
+                {
+                    return TypedCommandDispatcher.Rejected("BACKUP_AGENT_SIGNATURE_INVALID", signature.Reason ?? "The setup is not validly signed.");
+                }
             }
 
             var start = new ProcessStartInfo(setup) { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = workDir };
@@ -115,7 +125,7 @@ public sealed partial class BackupAgentInstallHandler(
             {
                 var reason = process.ExitCode switch
                 {
-                    20 => "activation/enrollment was refused (token or code invalid, expired or already used)",
+                    20 or 21 => "the Backup Agent was installed but activation was refused (code invalid, expired or already used, or CloudOrc unreachable)",
                     10 or 11 => "a Backup Agent service did not start",
                     2 => "the API address was rejected",
                     _ => $"setup exit code {process.ExitCode}"
