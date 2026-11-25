@@ -304,3 +304,19 @@ public class SeamlessSessionTests
         Assert.False(CloudOrc.WorkspaceUI.Services.SessionActions.IsSeamlessSession());
     }
 }
+
+public class ServerAdministratorCheckTests
+{
+    [Fact]
+    public void Admin_check_matches_whoami_including_uac_deny_only_groups()
+    {
+        // whoami /groups lists the Administrators SID (S-1-5-32-544) also when UAC made it "deny-only".
+        var psi = new System.Diagnostics.ProcessStartInfo("whoami", "/groups /fo csv") { RedirectStandardOutput = true, UseShellExecute = false };
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        var output = p.StandardOutput.ReadToEnd();
+        p.WaitForExit();
+        var expected = output.Contains("S-1-5-32-544", StringComparison.Ordinal);
+
+        Assert.Equal(expected, CloudOrc.WorkspaceUI.Services.SessionActions.IsServerAdministrator());
+    }
+}

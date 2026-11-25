@@ -151,6 +151,50 @@ public static class SessionActions
 
     private static readonly string[] SeamlessShellProcesses = ["rdpinit", "rdpshell"];
 
+    /// <summary>
+    /// True when the signed-in Windows account is a member of the server's local Administrators group
+    /// (server admin, domain admin, CloudOrc support). The panel is for the customer's Windows users only
+    /// (handoff §24 "end-user mode", §28 "not a full infrastructure console"), so it never shows here.
+    /// Reads the raw token groups: under UAC the Administrators group is "deny-only", which
+    /// WindowsIdentity.Groups / IsInRole leave out.
+    /// </summary>
+    public static bool IsServerAdministrator()
+    {
+        try
+        {
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            var admins = new System.Security.Principal.SecurityIdentifier(System.Security.Principal.WellKnownSidType.BuiltinAdministratorsSid, null);
+            GetTokenInformation(identity.Token, 2 /* TokenGroups */, IntPtr.Zero, 0, out var size);
+            if (size <= 0) return false;
+            var buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                if (!GetTokenInformation(identity.Token, 2, buffer, size, out _)) return false;
+                var count = Marshal.ReadInt32(buffer);
+                var entrySize = IntPtr.Size * 2; // SID_AND_ATTRIBUTES: PSID + DWORD (padded)
+                var first = buffer + IntPtr.Size; // GroupCount is followed by the (aligned) array
+                for (var i = 0; i < count; i++)
+                {
+                    var sidPtr = Marshal.ReadIntPtr(first + i * entrySize);
+                    if (new System.Security.Principal.SecurityIdentifier(sidPtr) == admins) return true;
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"admin check failed: {ex.Message}");
+        }
+
+        return false;
+    }
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    private static extern bool GetTokenInformation(IntPtr token, int infoClass, IntPtr info, int length, out int returnLength);
+
     /// <summary>Disconnect keeps every app running; the user can reconnect later.</summary>
     public static bool Disconnect() => WTSDisconnectSession(IntPtr.Zero, -1, false);
 

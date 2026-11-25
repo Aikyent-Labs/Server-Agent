@@ -77,6 +77,16 @@ public partial class App : Application
             return;
         }
 
+        // The panel is for the customer's Windows users only. Server administrators (local Administrators
+        // group: Administrator, domain/support admins) never get it; --force still opens it for support/testing.
+        if (!force && SessionActions.IsServerAdministrator())
+        {
+            Log.Write($"WorkspaceUI not shown: '{Environment.UserName}' is a server administrator (panel is for customer users only).");
+            new SessionStateFile(SessionActions.CurrentSessionId, Environment.UserName).Write(WorkspaceSessionState.StateDisabled);
+            Shutdown(0);
+            return;
+        }
+
         if (SystemParameters.HighContrast) ApplyHighContrast();
 
         // A previous panel that was killed may have left the TSPlus panel transparent: put it back

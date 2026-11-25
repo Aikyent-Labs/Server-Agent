@@ -293,6 +293,13 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
             return;
         }
 
+        // Only CloudOrc Windows users (seats) get the panel: any other account on the server exits quietly.
+        if (ok && Context?.ReasonCode == "WORKSPACE_SEAT_NOT_FOUND" && !force)
+        {
+            WorkspaceUnavailable?.Invoke("not a CloudOrc Windows user");
+            return;
+        }
+
         // DIRECT_APP: open the single published app at logon (never on a Watch restart: it is already open).
         if (ok && !startedByWatch && Context?.LaunchMode == WorkspaceLaunchModes.DirectApp)
         {
