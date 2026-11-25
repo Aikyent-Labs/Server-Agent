@@ -320,3 +320,42 @@ public class ServerAdministratorCheckTests
         Assert.Equal(expected, CloudOrc.WorkspaceUI.Services.SessionActions.IsServerAdministrator());
     }
 }
+
+public class TsplusAppSourceTests
+{
+    private static readonly string[] Ini =
+    [
+        "[Security]", "http=on",
+        "[App1]", "appname=Microsoft Remote Desktop", "path=", "users=Administrator", "all_users=no",
+        "[App3]", "appname=FloatingPanel", @"path=""C:\Program Files (x86)\TSplus\UserDesktop\FloatingPanel.exe""", "users=sayjaan1", "all_users=no",
+        "[App7]", "appname=Tally Prime", @"path=C:\TallyPrime\tally.exe", @"startup=C:\TallyPrime", "cmdline=", "users=sayjaan1;other", "groups=", "all_users=no",
+        "[App8]", "appname=Export", @"path=C:\Program Files (x86)\TSplus\UserDesktop\files\folder.exe", "startup=", @"cmdline=E:\2031003506\SAYJAAN\Export", "users=", "groups=CVS_Users", "all_users=no",
+        "[App9]", "appname=Calculator", @"path=C:\Windows\System32\calc.exe", "users=", "groups=", "all_users=yes",
+        "[App10]", "appname=Someone else", @"path=C:\x\x.exe", "users=nobody", "groups=Other", "all_users=no",
+        "[App11]", "appname=Desktop folder", @"path=C:\Program Files (x86)\TSplus\UserDesktop\files\folder.exe", "cmdline=", "startup=", "users=sayjaan1",
+    ];
+
+    [Fact]
+    public void User_gets_exactly_the_TSPlus_entries_published_to_them()
+    {
+        var apps = CloudOrc.WorkspaceUI.Services.TsplusAppSource.ForUser(Ini, @"SERVER\SayJaan1", [@"SERVER\CVS_Users"]);
+        Assert.Equal(["Tally Prime", "Export", "Calculator"], apps.Select(a => a.Name).ToArray());
+    }
+
+    [Fact]
+    public void Folder_entries_keep_the_TSPlus_launcher_and_its_folder()
+    {
+        var export = CloudOrc.WorkspaceUI.Services.TsplusAppSource.ForUser(Ini, "sayjaan1", ["CVS_Users"]).Single(a => a.Name == "Export");
+        Assert.True(export.IsFolder);
+        Assert.EndsWith("folder.exe", export.ExePath);
+        Assert.Equal(@"E:\2031003506\SAYJAAN\Export", export.Arguments);
+        Assert.StartsWith(CloudOrc.WorkspaceUI.Services.TsplusAppSource.IdPrefix, export.Id);
+    }
+
+    [Fact]
+    public void TSPlus_shell_entries_and_other_users_entries_are_never_listed()
+    {
+        var apps = CloudOrc.WorkspaceUI.Services.TsplusAppSource.ForUser(Ini, "Administrator", []);
+        Assert.Equal(["Calculator"], apps.Select(a => a.Name).ToArray());
+    }
+}

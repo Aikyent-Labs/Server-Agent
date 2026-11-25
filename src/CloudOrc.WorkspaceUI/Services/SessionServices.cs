@@ -18,7 +18,20 @@ public static class AppLauncher
         try
         {
             ProcessStartInfo psi;
-            if (app.IsFolder)
+            if (app.IsFolder && TsplusAppSource.IsFolderLauncher(app.ExePath) && File.Exists(app.ExePath))
+            {
+                // TSPlus folder entry: open it exactly like TSPlus does (its folder launcher + cmdline).
+                // explorer.exe is blocked for Floating Panel seats, so it must not be used here.
+                psi = new ProcessStartInfo(app.ExePath)
+                {
+                    UseShellExecute = true,
+                    Arguments = app.Arguments ?? string.Empty,
+                    WorkingDirectory = !string.IsNullOrWhiteSpace(app.StartupPath) && Directory.Exists(app.StartupPath)
+                        ? app.StartupPath
+                        : Path.GetDirectoryName(app.ExePath) ?? string.Empty,
+                };
+            }
+            else if (app.IsFolder)
             {
                 var folder = string.IsNullOrWhiteSpace(app.StartupPath) ? app.ExePath : app.StartupPath;
                 psi = new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true };

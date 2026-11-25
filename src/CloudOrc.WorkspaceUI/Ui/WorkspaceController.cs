@@ -272,11 +272,9 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     {
         // 1) Cached apps first: instant and works offline.
         var cached = LocalCache.Load();
-        if (cached is not null)
-        {
-            if (cached.Context is not null) Context = cached.Context;
-            SetApps(cached.Apps);
-        }
+        if (cached?.Context is not null) Context = cached.Context;
+        SetApps(cached?.Apps); // includes the TSPlus-published apps even with no cache and no backend
+
 
         RefreshWindows();
         _windowPoll.Start();
@@ -472,9 +470,21 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         catch (WorkspaceApiException ex) { Log.Write($"alerts: {ex.Code}"); }
     }
 
+    /// <summary>
+    /// The user's apps = what TSPlus publishes to them on this server (same list as the TSPlus panel,
+    /// read locally, works offline) plus any CloudOrc-published apps the backend adds; duplicates
+    /// (same executable + arguments) appear once.
+    /// </summary>
     private void SetApps(List<PublishedApp>? apps)
     {
-        _apps = apps ?? [];
+        var merged = new List<PublishedApp>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var a in TsplusAppSource.ForCurrentUser().Concat(apps ?? []))
+        {
+            if (seen.Add($"{a.ExePath}|{a.StartupPath}|{a.Arguments}")) merged.Add(a);
+        }
+
+        _apps = merged;
         RebuildPublished();
     }
 
@@ -551,6 +561,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         }
 
         Toast?.Invoke($"Opening {app.Name}…");
+        if (app.Id.StartsWith(TsplusAppSource.IdPrefix, StringComparison.Ordinal)) return; // TSPlus entry: not in the CloudOrc catalogue
         _ = Task.Run(async () =>
         {
             try { await _api.AppLaunchedAsync(app.Id, CancellationToken.None); }
