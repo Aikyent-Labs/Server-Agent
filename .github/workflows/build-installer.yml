@@ -6,7 +6,11 @@ name: Build CloudOrc Agent Installer
 on:
   push:
     branches: [main]
-    tags: ["v*"]
+    # v*      = PRODUCTION release (what live servers install: SERVER_AGENT_VERSION, default 1.5.11)
+    # uat-v*  = UAT release, published as a GitHub *pre-release* under its own tag/URL
+    #           (.../releases/download/uat-vX.Y.Z/). Only a UAT backend that sets
+    #           SERVER_AGENT_DOWNLOAD_BASE to that URL ever installs it; live never does.
+    tags: ["v*", "uat-v*"]
   pull_request:
     branches: [main]
 
@@ -48,7 +52,7 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
-          if ("${{ github.ref_type }}" -eq "tag" -and $tag -match '^v(\d+\.\d+\.\d+)$') {
+          if ("${{ github.ref_type }}" -eq "tag" -and $tag -match '^(?:uat-)?v(\d+\.\d+\.\d+)$') {
             $version = $Matches[1]
           } else {
             $version = "0.0.0-dev"
@@ -147,7 +151,7 @@ jobs:
     needs: build-installer
     runs-on: windows-latest
     # Only ever runs for a version tag push - never for a plain push to main or a PR.
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/uat-v')
     steps:
       - name: Download installer artifact
         uses: actions/download-artifact@v4
@@ -175,10 +179,14 @@ jobs:
           $alreadyExists = ($LASTEXITCODE -eq 0)
 
           if (-not $alreadyExists) {
+            # UAT tags are pre-releases: never "Latest", clearly titled, separate URL.
+            $isUat = $tag.StartsWith("uat-")
+            $title = if ($isUat) { "CloudOrc Agent UAT $tag (testing only - not for production)" } else { "CloudOrc Agent $tag" }
+            $extra = if ($isUat) { @("--prerelease", "--latest=false") } else { @() }
             gh release create $tag @assets `
               --repo "${{ github.repository }}" `
-              --title "CloudOrc Agent $tag" `
-              --generate-notes
+              --title $title `
+              --generate-notes @extra
             $alreadyExists = ($LASTEXITCODE -ne 0)
             # A non-zero exit here almost always means the other workflow won a narrow
             # race and created the release a moment after our `gh release view` check -
