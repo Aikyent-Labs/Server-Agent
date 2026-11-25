@@ -281,3 +281,26 @@ public class AssistancePolicyTests
     public void Closed_requests_do_nothing(string status) =>
         Assert.Equal(AssistancePolicy.Step.None, AssistancePolicy.Next(R(status), false, null, null, T0));
 }
+
+public class SeamlessSessionTests
+{
+    [Theory]
+    [InlineData(@"C:\Windows\System32\rdpinit.exe", true)]
+    [InlineData(@"C:\Windows\System32\rdpshell.exe", true)]
+    [InlineData(@"C:\Program Files (x86)\TSplus\UserDesktop\files\svcr.exe", true)]
+    [InlineData(@"C:\Program Files (x86)\TSplus\UserDesktop\files\FloatingPanel.exe", true)]
+    [InlineData(@"C:\Program Files\Tally\tally.exe", false)]
+    [InlineData(@"C:\Windows\System32\notepad.exe", false)]
+    [InlineData(null, false)]
+    public void Session_plumbing_is_not_listed_as_a_running_app(string? path, bool plumbing)
+    {
+        Assert.Equal(plumbing, CloudOrc.WorkspaceUI.Services.WindowTracker.IsInfrastructure(path));
+    }
+
+    [Fact]
+    public void This_test_host_is_not_a_seamless_session()
+    {
+        // The test runner runs in a normal desktop/service session: no RemoteApp shell, so no launcher mode.
+        Assert.False(CloudOrc.WorkspaceUI.Services.SessionActions.IsSeamlessSession());
+    }
+}

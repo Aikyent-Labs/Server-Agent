@@ -26,6 +26,14 @@ public partial class App : Application
         base.OnStartup(e);
         Log.Prune();
 
+        // One-shot from CloudOrc Watch after a crash loop: only make the TSPlus panel visible again, no UI.
+        if (e.Args.Any(a => a.Equals("--recover-tsplus", StringComparison.OrdinalIgnoreCase)))
+        {
+            try { TsplusPanelHider.Instance.RecoverOrphans(); } catch (Exception ex) { Log.Error("tsplus recover (watch)", ex); }
+            Shutdown(0);
+            return;
+        }
+
         DispatcherUnhandledException += OnDispatcherException;
         AppDomain.CurrentDomain.UnhandledException += (_, args) => Crash("domain", args.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, args) => { Log.Error("unobserved task", args.Exception); args.SetObserved(); };
@@ -88,7 +96,7 @@ public partial class App : Application
         {
             Log.Write($"Workspace panel not enabled for this user/server ({reason}); exiting quietly.");
             controller.MarkDisabled();
-            shell.Close();
+            shell.CloseForApp();
             Shutdown(0);
         };
         controller.RestartRequested += () => Dispatcher.BeginInvoke(() => RestartSelf(shell));
@@ -99,7 +107,7 @@ public partial class App : Application
     }
 
     /// <summary>Clean self-restart (workspace.ui.restart): start the new instance, then exit; the apps are untouched.</summary>
-    private void RestartSelf(Window shell)
+    private void RestartSelf(ShellWindow shell)
     {
         try
         {
@@ -114,7 +122,7 @@ public partial class App : Application
             Environment.Exit(1);
         }
 
-        shell.Close();
+        shell.CloseForApp();
         Shutdown(0);
     }
 

@@ -125,6 +125,14 @@ public sealed class WorkspaceUiSupervisor(
                     logger.LogWarning("WorkspaceUI crash loop in session {Session} ({User}): {Count} restarts in {Window} min. Restart stopped; the Windows session stays usable.",
                         s.SessionId, s.Username, tracker.Restarts.Count, options.Value.CrashLoopWindowMinutes);
                     TryRollback(exe, tracker);
+                    // A seamless (RemoteApp) user has no desktop: if our panel had hidden the TSPlus panel and
+                    // was hard-killed, put the TSPlus panel back now (one-shot, no UI) so the user can still
+                    // open apps while our panel is stopped.
+                    if (!sessions.TryStartInSession(s.SessionId, exe, "--recover-tsplus", out var recoverError))
+                    {
+                        logger.LogWarning("Could not restore the TSPlus panel in session {Session}: {Error}", s.SessionId, recoverError);
+                    }
+
                     break;
             }
 

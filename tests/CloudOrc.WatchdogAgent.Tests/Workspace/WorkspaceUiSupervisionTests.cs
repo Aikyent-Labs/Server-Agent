@@ -178,8 +178,18 @@ public class WorkspaceUiSupervisorTests : IDisposable
         public IReadOnlyCollection<int> GetSessionsRunning(string processName) => Running;
         public string? GetSessionUserSid(int sessionId) => null;
 
+        public List<int> RecoverStarts { get; } = [];
+
         public bool TryStartInSession(int sessionId, string exePath, string arguments, out string? error)
         {
+            if (arguments == "--recover-tsplus")
+            {
+                // One-shot "put the TSPlus panel back" run: not a panel start, never leaves a panel running.
+                RecoverStarts.Add(sessionId);
+                error = null;
+                return true;
+            }
+
             Started.Add(sessionId);
             error = StartSucceeds ? null : "denied";
             if (StartSucceeds) Running.Add(sessionId);
@@ -243,6 +253,8 @@ public class WorkspaceUiSupervisorTests : IDisposable
         }
 
         Assert.Equal(3, host.Started.Count);
+        // On the crash loop the Watch restores the TSPlus panel once (a seamless user is never left without one).
+        Assert.Equal([5], host.RecoverStarts);
     }
 
     [Fact]

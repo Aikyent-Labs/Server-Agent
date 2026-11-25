@@ -298,6 +298,8 @@ if (backendOptions.Enabled)
         builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.SecureAccessPipeServer>();
         // Readiness evidence (TSPlus, remote-session listener, firewall, network) — observation only.
         builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.EndpointHealthReporter>();
+        // Session feed for the 2FA sign-in gate: pushed on change instead of being polled remotely.
+        builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.SessionFeedReporter>();
     }
 
     builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspaceUiRestartHandler>();

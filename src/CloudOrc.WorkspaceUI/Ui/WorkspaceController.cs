@@ -96,6 +96,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         _windowPoll.Tick += (_, _) =>
         {
             RefreshWindows();
+            UpdateSeamless();
             TsplusPanelHider.Instance.Apply(); // TSPlus may (re)start its panel after us
         };
     }
@@ -130,7 +131,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     public bool IsAdmin => Context?.User.IsCustomerAdmin == true;
     public string SupportOrganization => Context?.Brand.SupportOrganization ?? "CloudOrc Support";
     public string LaunchModeText => (Context?.LaunchMode ?? WorkspaceLaunchModes.MinimalPanel).Replace('_', ' ');
-    public IReadOnlyList<string> RailItems => Context?.RailItems is { Count: > 0 } r ? r : ["apps", "backup", "files", "clipboard", "print", "ai", "support", "alerts", "more"];
+    public IReadOnlyList<string> RailItems => Context?.RailItems is { Count: > 0 } r ? r : ["apps", "backup", "files", "print", "ai", "support", "alerts", "more"];
 
     public string SupportContact
     {
@@ -221,6 +222,35 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     public bool Busy { get => _busy; private set => Set(ref _busy, value); }
 
     public bool HasPublishedApps => PublishedApps.Count > 0;
+
+    private bool _seamless = SessionActions.IsSeamlessSession();
+    /// <summary>
+    /// RemoteApp / seamless session (TSPlus .connect "Remote App", .rdp RemoteApp, HTML5 RemoteApp): the
+    /// user has no remote desktop, taskbar or Start menu, so this panel is their launcher — published apps
+    /// and folders are shown with Open, the TSPlus floating panel is replaced, and the panel cannot be
+    /// closed for the session. In a full desktop session the Apps tab shows only what is running.
+    /// </summary>
+    public bool IsSeamless { get => _seamless; private set { if (Set(ref _seamless, value)) { Raise(nameof(ShowLauncher)); Raise(nameof(AppsHeader)); Raise(nameof(AppsTip)); Raise(nameof(CanHideForSession)); UpdateTsplusHiding(); } } }
+    public bool ShowLauncher => IsSeamless;
+    public string AppsHeader => IsSeamless ? "YOUR APPS" : "RUNNING NOW";
+    public string AppsTip => IsSeamless
+        ? "Tip: these apps open as windows on your own PC — Alt+Tab shows them together with your PC's apps."
+        : "Tip: Alt+Tab works as usual. In a windowed RDP client use Alt+Page Up / Alt+Page Down.";
+    public bool CanHideForSession => !IsSeamless;
+
+    private void UpdateSeamless() => IsSeamless = SessionActions.IsSeamlessSession();
+
+    /// <summary>
+    /// Hide the TSPlus floating panel when the admin asked for it, or automatically in a seamless session —
+    /// but only once this panel actually has apps to offer, so a user is never left with no way to open one.
+    /// </summary>
+    private void UpdateTsplusHiding()
+    {
+        var ctx = Context;
+        if (ctx is null) return;
+        var hide = ctx.WorkspaceEnabled && (ctx.HideTsplusPanel || (IsSeamless && HasPublishedApps));
+        TsplusPanelHider.Instance.SetEnabled(hide);
+    }
     public bool HasRunningApps => RunningApps.Count > 0;
     public bool HasAlerts => Alerts.Count > 0;
 
@@ -285,7 +315,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
             {
                 var ctx = await _api.GetContextAsync(ct);
                 Context = ctx;
-                TsplusPanelHider.Instance.SetEnabled(ctx.WorkspaceEnabled && ctx.HideTsplusPanel);
+                UpdateTsplusHiding();
                 SetConnection("connected", "Connected");
                 Banner = ctx.ReasonCode == "WORKSPACE_SEAT_NOT_FOUND"
                     ? "This Windows user is not linked to a CloudOrc workspace yet. Apps and support are limited."
@@ -451,6 +481,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         }
 
         Raise(nameof(HasPublishedApps));
+        UpdateTsplusHiding();
     }
 
     /// <summary>Rebuilds "Running now" from the real windows (never optimistic state, §44).</summary>

@@ -127,6 +127,30 @@ public static class SessionActions
 {
     public static int CurrentSessionId => Process.GetCurrentProcess().SessionId;
 
+    /// <summary>
+    /// True in a RemoteApp (seamless) session: Windows runs its RemoteApp shell (rdpinit.exe / rdpshell.exe)
+    /// in place of a desktop. That is how TSPlus ".connect" Remote App clients, .rdp files in RemoteApp
+    /// mode and HTML5 RemoteApp sessions arrive; a full desktop session never has these.
+    /// </summary>
+    public static bool IsSeamlessSession()
+    {
+        var session = CurrentSessionId;
+        foreach (var name in SeamlessShellProcesses)
+        {
+            foreach (var p in Process.GetProcessesByName(name))
+            {
+                using (p)
+                {
+                    if (p.SessionId == session) return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static readonly string[] SeamlessShellProcesses = ["rdpinit", "rdpshell"];
+
     /// <summary>Disconnect keeps every app running; the user can reconnect later.</summary>
     public static bool Disconnect() => WTSDisconnectSession(IntPtr.Zero, -1, false);
 

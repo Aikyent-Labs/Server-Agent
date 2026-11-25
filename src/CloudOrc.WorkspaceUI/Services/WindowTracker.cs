@@ -42,8 +42,10 @@ public sealed class WindowTracker : IDisposable
                 if (pid == _ownPid) return true;
                 var title = GetTitle(h);
                 if (string.IsNullOrWhiteSpace(title)) return true;
+                var path = GetProcessPath(pid);
+                if (IsInfrastructure(path)) return true;
                 var state = IsIconic(h) ? WindowState2.Minimized : h == active ? WindowState2.Active : WindowState2.Running;
-                list.Add(new TopWindow(h, (int)pid, GetProcessPath(pid), title, state));
+                list.Add(new TopWindow(h, (int)pid, path, title, state));
             }
             catch
             {
@@ -83,6 +85,18 @@ public sealed class WindowTracker : IDisposable
         _lastForeign = hwnd;
         WindowsChanged?.Invoke();
     }
+
+    /// <summary>
+    /// Windows that are session plumbing, not the user's apps: the RemoteApp shell (rdpinit/rdpshell, e.g.
+    /// "RemoteApp Marker Window") and TSPlus' own panels/launchers (svcr, FloatingPanel) — this panel replaces those.
+    /// </summary>
+    private static readonly HashSet<string> InfrastructureProcesses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "rdpinit.exe", "rdpshell.exe", "svcr.exe", "floatingpanel.exe", "ctfmon.exe",
+    };
+
+    internal static bool IsInfrastructure(string? processPath) =>
+        !string.IsNullOrEmpty(processPath) && InfrastructureProcesses.Contains(Path.GetFileName(processPath));
 
     private static bool IsCandidate(IntPtr h)
     {

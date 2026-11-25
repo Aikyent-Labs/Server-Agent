@@ -440,6 +440,7 @@ public partial class ShellWindow : Window
 
     // ------------------------------------------------------------------ apps
 
+    /// <summary>Seamless launcher card: focus the app when exactly one window is open, else open it.</summary>
     private void OnLaunchClick(object sender, RoutedEventArgs e)
     {
         if ((sender as FrameworkElement)?.Tag is not PublishedAppVm vm) return;
@@ -676,6 +677,7 @@ public partial class ShellWindow : Window
         Confirm("Hide the panel?", "The CloudOrc panel stays hidden until you sign in again. Your apps are not affected.", "Hide panel", () =>
         {
             _c.MarkUserExit();
+            _closeAllowed = true;
             Application.Current.Shutdown(0);
         });
     }
@@ -702,6 +704,31 @@ public partial class ShellWindow : Window
         var action = _confirmAction;
         _confirmAction = null;
         action?.Invoke();
+    }
+
+    private bool _closeAllowed;
+
+    /// <summary>The app itself closes the panel (workspace disabled, self-restart, user's own "hide for session").</summary>
+    public void CloseForApp()
+    {
+        _closeAllowed = true;
+        Close();
+    }
+
+    /// <summary>
+    /// Alt+F4 / a stray close only collapses the panel to its edge handle. In a seamless (RemoteApp) session
+    /// the panel is the user's launcher, and closing the last RemoteApp window would end the session.
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (!_closeAllowed && _c.IsSeamless)
+        {
+            e.Cancel = true;
+            SetMode(PanelMode.Handle);
+            return;
+        }
+
+        base.OnClosing(e);
     }
 
     protected override void OnClosed(EventArgs e)

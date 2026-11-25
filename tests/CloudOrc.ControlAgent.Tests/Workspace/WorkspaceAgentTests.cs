@@ -356,3 +356,31 @@ public class SecureAccessBrokerTests
         Assert.True((await b.DecideAsync(Req("Administrator"), CancellationToken.None)).Allow);
     }
 }
+
+public class SessionFeedReporterTests
+{
+    [Fact]
+    public void Logon_time_is_utc_iso_truncated_to_the_minute_like_quser()
+    {
+        var t = new DateTime(2026, 11, 25, 4, 39, 47, DateTimeKind.Utc).ToFileTimeUtc();
+        Assert.Equal("2026-11-25T04:39:00.0000000Z", SessionFeedReporter.FormatLogon(t));
+        Assert.Null(SessionFeedReporter.FormatLogon(0));
+    }
+
+    [Fact]
+    public void Signature_changes_on_reconnect_and_ignores_order()
+    {
+        var a = new SessionRow("ravi", "RDP-Tcp#3", "3", "Active", "x");
+        var b = new SessionRow("asha", "", "4", "Disc", "y");
+        Assert.Equal(SessionFeedReporter.Signature([a, b]), SessionFeedReporter.Signature([b, a]));
+        Assert.NotEqual(SessionFeedReporter.Signature([a]), SessionFeedReporter.Signature([a with { SessionName = "RDP-Tcp#9" }]));
+        Assert.NotEqual(SessionFeedReporter.Signature([a]), SessionFeedReporter.Signature([a with { State = "Disc", SessionName = "" }]));
+    }
+
+    [Fact]
+    public void Enumerate_returns_the_current_session_on_this_machine()
+    {
+        var rows = SessionFeedReporter.Enumerate();
+        Assert.All(rows, r => Assert.NotEqual("0", r.SessionId));
+    }
+}
