@@ -390,6 +390,22 @@ foreach ($component in @("BackupWorker", "Updater", "Tray", "Engines")) {
         Write-Host "  Package has no $component - skipped." -ForegroundColor Yellow
     }
 }
+# Remote Workspace panel (WorkspaceUI), same layout and Run entry as the Inno Setup installer:
+# {InstallRoot}\WorkspaceUI\CloudOrc.WorkspaceUI.exe. The Watch starts it in every user session
+# (including RemoteApp/seamless sessions); the HKLM Run entry also opens it at desktop sign-in.
+# Running panels are closed first so their files are not locked; the Watch restarts them.
+$workspaceUiSource = Join-Path $extractDir "CloudOrcAgents-win-x64\WorkspaceUI"
+if (Test-Path $workspaceUiSource) {
+    Get-Process -Name "CloudOrc.WorkspaceUI" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    $workspaceUiDir = Join-Path $InstallRoot "WorkspaceUI"
+    Deploy-Agent -Name "WorkspaceUI" -SourceDir $workspaceUiSource -TargetDir $workspaceUiDir
+    $runKey = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+    Set-ItemProperty -Path $runKey -Name "CloudOrcWorkspaceUI" -Value ('"' + (Join-Path $workspaceUiDir "CloudOrc.WorkspaceUI.exe") + '"')
+    Write-Host "  Registered the Remote Workspace panel to start at sign-in."
+} else {
+    Write-Host "  Package has no WorkspaceUI - skipped." -ForegroundColor Yellow
+}
+
 if (-not (Test-Path (Join-Path $InstallRoot "Engines\engines.manifest.json"))) {
     Write-Host "  WARNING: no backup engines installed - this agent will not advertise backup.v1." -ForegroundColor Yellow
 }
