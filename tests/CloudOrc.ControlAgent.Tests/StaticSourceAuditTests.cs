@@ -110,7 +110,8 @@ public class StaticSourceAuditTests
     /// execution transport and do not touch BackendConnectionService's WSS-only command
     /// channel. src/CloudOrc.WorkspaceUI/ (the per-user Remote Workspace panel) is the second
     /// narrow exception: it only shows end-user help text about native RDP client shortcuts
-    /// (handoff v1.2 §42) and runs no transport. Everywhere else in src/ and installer/ remains
+    /// (handoff v1.2 §42) and runs no transport. Workspace/EndpointHealthReporter.cs reads the session
+    /// listener port for readiness evidence (Part A §6.1) and is likewise not a transport. Everywhere else in src/ and installer/ remains
     /// fully covered.
     /// </summary>
     [Fact]
@@ -123,6 +124,8 @@ public class StaticSourceAuditTests
             $"{Path.DirectorySeparatorChar}IRdpTransferPolicyExecutor.cs",
             $"{Path.DirectorySeparatorChar}RdpTransferPolicyOutcome.cs",
             $"{Path.DirectorySeparatorChar}CloudOrc.WorkspaceUI{Path.DirectorySeparatorChar}",
+            // Readiness evidence only reads the session listener port from the RDP-Tcp registry key; no transport.
+            $"{Path.DirectorySeparatorChar}Workspace{Path.DirectorySeparatorChar}EndpointHealthReporter.cs",
         };
 
         var offenders = ScannedFiles()

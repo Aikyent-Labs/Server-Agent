@@ -284,6 +284,22 @@ if (backendOptions.Enabled)
     builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.IWorkspaceTokenIssuer, CloudOrc.ControlAgent.Workspace.BackendWorkspaceTokenIssuer>();
     builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.WorkspaceTokenBroker>();
     builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.WorkspaceHealthReporter>();
+    // Secure-Access Broker for the native Credential Provider (handoff §29–30). Offline grace is off by default.
+    builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.ISecureAccessDecisionSource, CloudOrc.ControlAgent.Workspace.BackendSecureAccessDecisionSource>();
+    builder.Services.AddSingleton(sp => new CloudOrc.ControlAgent.Workspace.SecureAccessBroker(
+        sp.GetRequiredService<CloudOrc.ControlAgent.Workspace.ISecureAccessDecisionSource>(),
+        sp.GetRequiredService<TimeProvider>(),
+        sp.GetRequiredService<ILogger<CloudOrc.ControlAgent.Workspace.SecureAccessBroker>>())
+    {
+        OfflineGrace = TimeSpan.FromMinutes(Math.Max(0, builder.Configuration.GetValue<int>("Workspace:SecureAccessOfflineGraceMinutes")))
+    });
+    if (OperatingSystem.IsWindows())
+    {
+        builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.SecureAccessPipeServer>();
+        // Readiness evidence (TSPlus, remote-session listener, firewall, network) — observation only.
+        builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.EndpointHealthReporter>();
+    }
+
     builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspaceUiRestartHandler>();
     builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspacePolicyRefreshHandler>();
 

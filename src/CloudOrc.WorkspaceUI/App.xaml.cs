@@ -19,6 +19,7 @@ public partial class App : Application
 {
     private Mutex? _mutex;
     private WorkspaceController? _controller;
+    private AssistanceManager? _assistance;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -92,6 +93,8 @@ public partial class App : Application
         };
         controller.RestartRequested += () => Dispatcher.BeginInvoke(() => RestartSelf(shell));
         shell.Show();
+        _assistance = new AssistanceManager(api, Dispatcher);
+        shell.AttachAssistance(_assistance);
         _ = controller.StartAsync(startedByWatch, force);
     }
 
@@ -119,6 +122,7 @@ public partial class App : Application
     {
         try
         {
+            _assistance?.Dispose();
             _controller?.Dispose();
             _mutex?.ReleaseMutex();
         }

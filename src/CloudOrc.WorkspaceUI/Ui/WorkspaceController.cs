@@ -100,6 +100,9 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         };
     }
 
+    /// <summary>Backend client for the Phase 2 surfaces (security, users, files, assistance).</summary>
+    public WorkspaceApi Api => _api;
+
     // ------------------------------------------------------------------ bindable state
 
     public ObservableCollection<PublishedAppVm> PublishedApps { get; } = [];

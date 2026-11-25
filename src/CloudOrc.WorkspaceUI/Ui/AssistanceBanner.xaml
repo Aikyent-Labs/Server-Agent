@@ -1,0 +1,16 @@
+<Window x:Class="CloudOrc.WorkspaceUI.Ui.AssistanceBanner"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CloudOrc remote assistance active" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize" SizeToContent="WidthAndHeight"
+        AutomationProperties.Name="Remote assistance is active">
+  <Border Background="#DC2626" CornerRadius="0,0,10,10" Padding="14,7">
+    <StackPanel Orientation="Horizontal">
+      <Ellipse Width="9" Height="9" Fill="White" VerticalAlignment="Center" Margin="0,0,10,0"/>
+      <TextBlock x:Name="Text" Foreground="White" FontSize="13" VerticalAlignment="Center" TextWrapping="NoWrap"/>
+      <TextBlock x:Name="Timer" Foreground="#FECACA" FontSize="13" VerticalAlignment="Center" Margin="10,0,14,0"/>
+      <Button Content="Stop" Padding="14,3" Click="OnStop" Background="White" Foreground="#B91C1C" BorderThickness="0"
+              FontWeight="SemiBold" Cursor="Hand" AutomationProperties.Name="Stop remote assistance"/>
+    </StackPanel>
+  </Border>
+</Window>

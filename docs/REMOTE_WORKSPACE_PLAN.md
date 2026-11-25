@@ -3,7 +3,20 @@
 Source: `CloudOrc_Remote_Workspace_Dev_Handoff_v1.2.docx` (21 Nov 2026). Sections 40–54 of that
 document take precedence over earlier sections.
 Branch: `varun-tsplus` in both `Server-Agent` and `Cloude_Website`.
-Status: **Phase 1 built and live-tested on WIN-7FD5JOCI12B (24 Nov 2026). Not committed yet. Phase 2 not started.**
+Status: **Phase 1 committed (24 Nov 2026). Phase 2 built and live-tested on WIN-7FD5JOCI12B (25 Nov 2026), except
+the native Credential Provider DLL (no C++ toolchain on the build server — see docs/SECURE_ACCESS_CREDENTIAL_PROVIDER.md).**
+
+### Phase 2 completion notes (25 Nov 2026)
+| Item | State | Notes |
+|---|---|---|
+| 2.1 Secure Access — backend decision, agent Secure-Access Broker pipe, panel Security card | Done, live-tested | Decision reuses secureAccess.evaluateSecureAccess + rdpMfa; NOT_MANAGED accounts never locked out; fail closed for managed seats |
+| 2.1 Native Credential Provider shim (C++) | **Not built** | Needs VS Build Tools + Windows SDK and a test VM; contract and recovery path documented |
+| 2.2 Remote Assistance with consent | Done, live-tested | Provider = Windows RDS shadow; consent popup (view default, control opt-in, elevation never), red Stop bar, lease expiry, audit; admin request/end/join command in Agent monitoring |
+| 2.3 Users & Access (customer admin) | Done, live-tested | Reuses windowsUser owner-scoped service + OTP step-up; Add user opens the portal |
+| 2.4 File transfer — "Send a file to my PC" | Done (email step not live-tested) | Existing rdpTransfer policy-checked agent download; single-use 15-min pickup link emailed to the seat |
+| 2.5 Network readiness (P0) | Done, live-tested | network_zone data, checklist with stable reason codes, Failure Lens in Agent monitoring; **not yet wired to block the provisioning READY state** (needs provisioning owner sign-off) |
+| 2.6 Optional extras (CloudOrc desktop, web shell, Local Companion) | Not started | Marked "only if approved" in this plan |
+
 
 ### Phase 1 completion notes (24 Nov 2026)
 - All Phase 1 items below are implemented: backend `remoteWorkspace` module + migration 0425, agent

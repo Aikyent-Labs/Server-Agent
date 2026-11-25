@@ -258,3 +258,101 @@ public class WorkspaceCommandQueueTests
     public void Only_known_workspace_commands_are_routed(string? type, bool expected) =>
         Assert.Equal(expected, WorkspaceCommandTypes.IsWorkspace(type));
 }
+
+public class SecureAccessBrokerTests
+{
+    private sealed class FakeSource(Func<SecureAccessRequest, ApiResponse> respond, bool configured = true) : ISecureAccessDecisionSource
+    {
+        public bool IsConfigured { get; } = configured;
+        public List<SecureAccessRequest> Calls { get; } = [];
+        public Func<SecureAccessRequest, ApiResponse> Respond { get; set; } = respond;
+        public Task<ApiResponse> DecideAsync(SecureAccessRequest request, CancellationToken cancellationToken)
+        {
+            Calls.Add(request);
+            return Task.FromResult(Respond(request));
+        }
+    }
+
+    private sealed class Clock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    private static readonly DateTimeOffset T0 = new(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
+    private static ApiResponse Ok(string decision, bool allow) =>
+        new(HttpStatusCode.OK, $$"""{"decision":"{{decision}}","allow":{{(allow ? "true" : "false")}},"reason_code":"X","mfa_required":{{(decision == "MFA_REQUIRED" ? "true" : "false")}},"policy_version":3,"correlation_id":"c"}""", null, null);
+    private static readonly ApiResponse Down = new(null, null, null, "connection refused");
+    private static SecureAccessRequest Req(string u = @"VPS\ravi") => new() { Username = u, SessionId = 3 };
+
+    [Fact]
+    public async Task Passes_the_bare_username_and_returns_the_backend_decision()
+    {
+        var src = new FakeSource(_ => Ok("MFA_REQUIRED", false));
+        var b = new SecureAccessBroker(src, new Clock(T0), NullLogger<SecureAccessBroker>.Instance);
+        var d = await b.DecideAsync(Req(), CancellationToken.None);
+        Assert.Equal("ravi", src.Calls[0].Username);
+        Assert.False(d.Allow);
+        Assert.True(d.MfaRequired);
+        Assert.Equal(3, d.PolicyVersion);
+    }
+
+    [Fact]
+    public async Task Offline_fails_closed_for_a_known_managed_seat_when_grace_is_off()
+    {
+        var src = new FakeSource(_ => Ok("ALLOW", true));
+        var b = new SecureAccessBroker(src, new Clock(T0), NullLogger<SecureAccessBroker>.Instance);
+        await b.DecideAsync(Req(), CancellationToken.None);
+        src.Respond = _ => Down;
+        var d = await b.DecideAsync(Req(), CancellationToken.None);
+        Assert.False(d.Allow);
+        Assert.Equal(SecureAccessDecisions.Unavailable, d.Decision);
+    }
+
+    [Fact]
+    public async Task Offline_grace_allows_a_recent_allow_then_expires()
+    {
+        var clock = new Clock(T0);
+        var src = new FakeSource(_ => Ok("ALLOW", true));
+        var b = new SecureAccessBroker(src, clock, NullLogger<SecureAccessBroker>.Instance) { OfflineGrace = TimeSpan.FromMinutes(30) };
+        await b.DecideAsync(Req(), CancellationToken.None);
+        src.Respond = _ => Down;
+        clock.Now = T0.AddMinutes(10);
+        var d = await b.DecideAsync(Req(), CancellationToken.None);
+        Assert.True(d.Allow);
+        Assert.True(d.FromCache);
+        clock.Now = T0.AddMinutes(40);
+        Assert.False((await b.DecideAsync(Req(), CancellationToken.None)).Allow);
+    }
+
+    [Fact]
+    public async Task An_mfa_or_deny_result_clears_the_cached_allow()
+    {
+        var src = new FakeSource(_ => Ok("ALLOW", true));
+        var b = new SecureAccessBroker(src, new Clock(T0), NullLogger<SecureAccessBroker>.Instance) { OfflineGrace = TimeSpan.FromMinutes(30) };
+        await b.DecideAsync(Req(), CancellationToken.None);
+        src.Respond = _ => Ok("DENY", false);
+        await b.DecideAsync(Req(), CancellationToken.None);
+        src.Respond = _ => Down;
+        Assert.False((await b.DecideAsync(Req(), CancellationToken.None)).Allow);
+    }
+
+    [Fact]
+    public async Task Unknown_account_is_never_locked_out_during_an_outage()
+    {
+        var b = new SecureAccessBroker(new FakeSource(_ => Down), new Clock(T0), NullLogger<SecureAccessBroker>.Instance);
+        var d = await b.DecideAsync(Req("Administrator"), CancellationToken.None);
+        Assert.True(d.Allow);
+        Assert.Equal(SecureAccessDecisions.NotManaged, d.Decision);
+    }
+
+    [Fact]
+    public async Task Not_managed_accounts_from_the_backend_are_not_remembered_as_managed()
+    {
+        var src = new FakeSource(_ => Ok("NOT_MANAGED", true));
+        var b = new SecureAccessBroker(src, new Clock(T0), NullLogger<SecureAccessBroker>.Instance);
+        await b.DecideAsync(Req("Administrator"), CancellationToken.None);
+        src.Respond = _ => Down;
+        Assert.True((await b.DecideAsync(Req("Administrator"), CancellationToken.None)).Allow);
+    }
+}

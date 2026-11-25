@@ -92,6 +92,20 @@ public sealed class WorkspaceApi : IDisposable
     public Task RunBackupAsync(CancellationToken ct) => SendAsync<JsonElement>(HttpMethod.Post, "backup/run", new { }, ct);
     public Task MarkAlertsReadAsync(IEnumerable<string> ids, CancellationToken ct) => SendAsync<JsonElement>(HttpMethod.Post, "notifications/read", new { ids = ids.ToArray() }, ct);
     public Task AppLaunchedAsync(string appId, CancellationToken ct) => SendAsync<JsonElement>(HttpMethod.Post, $"apps/{Uri.EscapeDataString(appId)}/launched", new { }, ct);
+    // Phase 2
+    public Task<SecurityStatus> GetSecurityAsync(CancellationToken ct) => GetAsync<SecurityStatus>("security", ct);
+    public Task<WorkspaceUsersResponse> GetUsersAsync(CancellationToken ct) => GetAsync<WorkspaceUsersResponse>("users", ct);
+    public Task<ActionResult> RequestUserOtpAsync(string userId, string action, CancellationToken ct) => SendAsync<ActionResult>(HttpMethod.Post, $"users/{Uri.EscapeDataString(userId)}/action-otp", new { action }, ct);
+    public Task<ActionResult> ApplyUserActionAsync(string userId, string action, string otp, CancellationToken ct) => SendAsync<ActionResult>(HttpMethod.Post, $"users/{Uri.EscapeDataString(userId)}/action", new { action, otp }, ct);
+    public Task<ActionResult> SendResetLinkAsync(string userId, CancellationToken ct) => SendAsync<ActionResult>(HttpMethod.Post, $"users/{Uri.EscapeDataString(userId)}/password-reset-link", new { }, ct);
+    public Task<ActionResult> SignOutUserAsync(string userId, CancellationToken ct) => SendAsync<ActionResult>(HttpMethod.Post, $"users/{Uri.EscapeDataString(userId)}/sign-out", new { confirm = true }, ct);
+    public Task<FileSendResult> SendFileToPcAsync(string path, CancellationToken ct) => SendAsync<FileSendResult>(HttpMethod.Post, "files/send", new { path }, ct);
+    public Task<AssistanceEnvelope> GetAssistanceAsync(CancellationToken ct) => GetAsync<AssistanceEnvelope>("assistance", ct);
+    public Task<AssistanceEnvelope> DecideAssistanceAsync(string id, bool allow, IEnumerable<string> capabilities, int durationMinutes, CancellationToken ct) =>
+        SendAsync<AssistanceEnvelope>(HttpMethod.Post, $"assistance/{Uri.EscapeDataString(id)}/decision", new { allow, capabilities = capabilities.ToArray(), durationMinutes }, ct);
+    public Task<AssistanceEnvelope> ReportAssistanceAsync(string id, string state, string? reason, CancellationToken ct) =>
+        SendAsync<AssistanceEnvelope>(HttpMethod.Post, $"assistance/{Uri.EscapeDataString(id)}/state", new { state, reason }, ct);
+
     public Task<SupportCategories> GetSupportCategoriesAsync(CancellationToken ct) => GetAsync<SupportCategories>("support/categories", ct);
     public Task<TicketResult> CreateTicketAsync(object body, CancellationToken ct) => SendAsync<TicketResult>(HttpMethod.Post, "support/ticket", body, ct);
     public Task<AiAnswer> AskAiAsync(string message, string sessionId, CancellationToken ct) => SendAsync<AiAnswer>(HttpMethod.Post, "ai/ask", new { message, sessionId }, ct);

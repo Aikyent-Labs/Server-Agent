@@ -18,6 +18,7 @@ public sealed class WorkspaceContext
     [JsonPropertyName("permittedActions")] public List<string> PermittedActions { get; set; } = [];
     [JsonPropertyName("preferences")] public Preferences Preferences { get; set; } = new();
     [JsonPropertyName("hideTsplusPanel")] public bool HideTsplusPanel { get; set; }
+    [JsonPropertyName("portalUsersUrl")] public string? PortalUsersUrl { get; set; }
     [JsonPropertyName("policyVersion")] public int PolicyVersion { get; set; }
     [JsonPropertyName("correlationId")] public string? CorrelationId { get; set; }
 
@@ -186,4 +187,91 @@ public sealed class SupportCategory
     [JsonPropertyName("subcategories")] public List<SupportCategory> Subcategories { get; set; } = [];
 
     public override string ToString() => Name;
+}
+
+// ---------------------------------------------------------------- Phase 2
+
+public sealed class SecurityStatus
+{
+    [JsonPropertyName("managed")] public bool Managed { get; set; }
+    [JsonPropertyName("mfa")] public MfaStatus Mfa { get; set; } = new();
+    [JsonPropertyName("ipPolicy")] public IpPolicyStatus? IpPolicy { get; set; }
+    [JsonPropertyName("signedInAt")] public DateTimeOffset? SignedInAt { get; set; }
+}
+
+public sealed class MfaStatus
+{
+    [JsonPropertyName("required")] public bool Required { get; set; }
+    [JsonPropertyName("verified")] public bool Verified { get; set; }
+    [JsonPropertyName("verifiedAt")] public DateTimeOffset? VerifiedAt { get; set; }
+    [JsonPropertyName("rememberUntil")] public DateTimeOffset? RememberUntil { get; set; }
+}
+
+public sealed class IpPolicyStatus
+{
+    [JsonPropertyName("enabled")] public bool Enabled { get; set; }
+    [JsonPropertyName("allowedNetworks")] public int AllowedNetworks { get; set; }
+}
+
+public sealed class WorkspaceUsersResponse
+{
+    [JsonPropertyName("users")] public List<WorkspaceUserRow> Users { get; set; } = [];
+}
+
+public sealed class WorkspaceUserRow
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("username")] public string Username { get; set; } = string.Empty;
+    [JsonPropertyName("displayName")] public string? DisplayName { get; set; }
+    [JsonPropertyName("email")] public string? Email { get; set; }
+    [JsonPropertyName("status")] public string? Status { get; set; }
+    [JsonPropertyName("operationStatus")] public string? OperationStatus { get; set; }
+    [JsonPropertyName("sessionStatus")] public string? SessionStatus { get; set; }
+    [JsonPropertyName("twoFactorEnabled")] public bool TwoFactorEnabled { get; set; }
+    [JsonPropertyName("isOwnerLogin")] public bool IsOwnerLogin { get; set; }
+    [JsonPropertyName("isYou")] public bool IsYou { get; set; }
+
+    [JsonIgnore] public bool IsSuspended => string.Equals(Status, "suspended", StringComparison.OrdinalIgnoreCase);
+    [JsonIgnore] public string Summary => $"{(IsSuspended ? "Suspended" : (Status ?? "-"))}{(TwoFactorEnabled ? " · 2FA on" : "")}{(string.IsNullOrWhiteSpace(SessionStatus) ? "" : " · " + SessionStatus)}{(IsYou ? " · you" : "")}";
+    public override string ToString() => $"{DisplayName ?? Username} ({Username}), {Summary}";
+}
+
+public sealed class ActionResult
+{
+    [JsonPropertyName("ok")] public bool Ok { get; set; }
+    [JsonPropertyName("message")] public string? Message { get; set; }
+}
+
+public sealed class FileSendResult
+{
+    [JsonPropertyName("ok")] public bool Ok { get; set; }
+    [JsonPropertyName("fileName")] public string? FileName { get; set; }
+    [JsonPropertyName("sentTo")] public string? SentTo { get; set; }
+    [JsonPropertyName("expiresAt")] public DateTimeOffset? ExpiresAt { get; set; }
+}
+
+public sealed class AssistanceEnvelope
+{
+    [JsonPropertyName("request")] public AssistanceRequest? Request { get; set; }
+}
+
+public sealed class AssistanceRequest
+{
+    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("status")] public string Status { get; set; } = string.Empty;
+    [JsonPropertyName("sessionId")] public int SessionId { get; set; }
+    [JsonPropertyName("requesterName")] public string RequesterName { get; set; } = string.Empty;
+    [JsonPropertyName("requesterOrg")] public string RequesterOrg { get; set; } = string.Empty;
+    [JsonPropertyName("ticketRef")] public string? TicketRef { get; set; }
+    [JsonPropertyName("reason")] public string Reason { get; set; } = string.Empty;
+    [JsonPropertyName("providerLabel")] public string? ProviderLabel { get; set; }
+    [JsonPropertyName("providerCapabilities")] public List<string> ProviderCapabilities { get; set; } = [];
+    [JsonPropertyName("requestedCapabilities")] public List<string> RequestedCapabilities { get; set; } = [];
+    [JsonPropertyName("grantedCapabilities")] public List<string>? GrantedCapabilities { get; set; }
+    [JsonPropertyName("requestExpiresAt")] public DateTimeOffset? RequestExpiresAt { get; set; }
+    [JsonPropertyName("leaseExpiresAt")] public DateTimeOffset? LeaseExpiresAt { get; set; }
+    [JsonPropertyName("startedAt")] public DateTimeOffset? StartedAt { get; set; }
+
+    [JsonIgnore] public bool IsPending => Status == "PENDING";
+    [JsonIgnore] public bool IsGranted => Status is "GRANTED" or "ACTIVE";
 }

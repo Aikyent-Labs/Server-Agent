@@ -1,0 +1,66 @@
+<Window x:Class="CloudOrc.WorkspaceUI.Ui.ConsentWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CloudOrc Remote Assistance" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="True" ResizeMode="NoResize" SizeToContent="Height" Width="520"
+        WindowStartupLocation="CenterScreen" AutomationProperties.Name="Remote assistance request">
+  <Border Background="{DynamicResource PanelBg}" CornerRadius="14" BorderBrush="{DynamicResource Border}" BorderThickness="1" Padding="22">
+    <StackPanel>
+      <DockPanel>
+        <Border DockPanel.Dock="Right" Background="{DynamicResource OkSoft}" CornerRadius="10" Padding="8,3" VerticalAlignment="Top">
+          <TextBlock Text="Secure request" FontSize="11.5" Foreground="{DynamicResource Ok}"/>
+        </Border>
+        <StackPanel>
+          <TextBlock x:Name="BrandText" Style="{StaticResource Small}" Text="CloudOrc · Remote Assistance"/>
+          <TextBlock x:Name="Headline" Style="{StaticResource Title}" FontSize="19" Margin="0,4,0,0"/>
+          <TextBlock Style="{StaticResource Body}" Margin="0,4,0,0" Foreground="{DynamicResource Muted}"
+                     Text="A support engineer is asking to see your session to help with an issue. Nothing happens unless you allow it."/>
+        </StackPanel>
+      </DockPanel>
+
+      <Border Background="{DynamicResource SurfaceBg}" CornerRadius="10" Padding="12" Margin="0,16,0,0">
+        <Grid>
+          <Grid.ColumnDefinitions><ColumnDefinition Width="100"/><ColumnDefinition/></Grid.ColumnDefinitions>
+          <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+          <TextBlock Style="{StaticResource Small}" Text="Engineer"/>
+          <TextBlock Grid.Column="1" x:Name="EngineerText" FontWeight="SemiBold" FontSize="13"/>
+          <TextBlock Grid.Row="1" Style="{StaticResource Small}" Text="Organization" Margin="0,4,0,0"/>
+          <TextBlock Grid.Row="1" Grid.Column="1" x:Name="OrgText" FontSize="13" Margin="0,4,0,0"/>
+          <TextBlock Grid.Row="2" Style="{StaticResource Small}" Text="Reason" Margin="0,4,0,0"/>
+          <TextBlock Grid.Row="2" Grid.Column="1" x:Name="ReasonText" FontSize="13" Margin="0,4,0,0"/>
+        </Grid>
+      </Border>
+
+      <Grid Margin="0,16,0,0">
+        <Grid.ColumnDefinitions><ColumnDefinition Width="1.3*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Section}" Margin="0,0,0,6" Text="ALLOW"/>
+          <CheckBox x:Name="CapView" IsChecked="True" IsEnabled="False" Margin="0,3" Content="View my screen (recommended)"/>
+          <CheckBox x:Name="CapControl" Margin="0,3" Content="Control mouse and keyboard"/>
+          <CheckBox x:Name="CapClipboard" Margin="0,3" IsEnabled="False" Content="Clipboard (copy and paste)"/>
+          <CheckBox x:Name="CapFiles" Margin="0,3" IsEnabled="False" Content="File transfer"/>
+          <CheckBox x:Name="CapElevation" Margin="0,3" IsEnabled="False" Content="Run as administrator"/>
+          <TextBlock x:Name="CapNote" Style="{StaticResource Small}" Margin="0,4,0,0"/>
+        </StackPanel>
+        <StackPanel Grid.Column="1" Margin="16,0,0,0">
+          <TextBlock Style="{StaticResource Section}" Margin="0,0,0,6" Text="FOR HOW LONG"/>
+          <RadioButton x:Name="Dur15" GroupName="dur" Margin="0,3" Content="15 minutes" IsChecked="True"/>
+          <RadioButton x:Name="Dur30" GroupName="dur" Margin="0,3" Content="30 minutes"/>
+          <RadioButton x:Name="Dur60" GroupName="dur" Margin="0,3" Content="1 hour"/>
+          <RadioButton x:Name="DurSession" GroupName="dur" Margin="0,3" Content="Until I sign out"/>
+        </StackPanel>
+      </Grid>
+
+      <TextBlock Style="{StaticResource Small}" Margin="0,14,0,0" TextWrapping="Wrap"
+                 Text="Windows will also ask you once more when the engineer connects. You can stop access at any time from the red bar at the top of the screen."/>
+
+      <DockPanel Margin="0,16,0,0">
+        <TextBlock x:Name="ExpiryText" Style="{StaticResource Small}" VerticalAlignment="Center"/>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button Style="{StaticResource SecondaryButton}" Content="Decline" Width="100" Margin="0,0,8,0" Click="OnDecline" IsCancel="True"/>
+          <Button x:Name="AllowButton" Style="{StaticResource PrimaryButton}" Content="Allow" Width="100" Click="OnAllow"/>
+        </StackPanel>
+      </DockPanel>
+    </StackPanel>
+  </Border>
+</Window>

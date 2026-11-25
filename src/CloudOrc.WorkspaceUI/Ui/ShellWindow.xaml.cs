@@ -212,9 +212,9 @@ public partial class ShellWindow : Window
                 _pinned && _mode == PanelMode.Expanded,
                 IsMouseOver,
                 IsTyping(),
-                ConfirmOverlay.Visibility == Visibility.Visible,
+                ConfirmOverlay.Visibility == Visibility.Visible || OtpOverlay.Visibility == Visibility.Visible,
                 critical,
-                remoteAssistanceActive: false,
+                remoteAssistanceActive: false, // the red Stop bar is a separate always-visible window
                 idle,
                 delay))
         {
@@ -239,7 +239,7 @@ public partial class ShellWindow : Window
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && ConfirmOverlay.Visibility != Visibility.Visible)
+        if (e.Key == Key.Escape && ConfirmOverlay.Visibility != Visibility.Visible && OtpOverlay.Visibility != Visibility.Visible)
         {
             SetMode(PanelMode.Handle);
             e.Handled = true;
@@ -311,7 +311,12 @@ public partial class ShellWindow : Window
         if (tab == "backup") _ = _c.LoadBackupAsync();
         if (tab == "alerts") _ = _c.LoadAlertsAsync();
         if (tab == "apps") _c.RefreshWindows();
-        if (tab == "more") LoadPreferencesIntoUi();
+        if (tab == "more")
+        {
+            LoadPreferencesIntoUi();
+            _ = LoadSecurityAsync();
+            _ = LoadUsersAsync();
+        }
         if (tab == "support") _ = LoadTicketCategoriesAsync();
         UpdateRailSelection();
     }
@@ -377,6 +382,9 @@ public partial class ShellWindow : Window
             ? "Allowed file types: " + string.Join(", ", caps.Files.AllowedExtensions.Select(x => "." + x.TrimStart('.')))
             : string.Empty;
         Tone(FilesCard, filesOk ? "ok" : "bad");
+        // "Send a file to my PC" only when the administrator allows file transfer (server re-checks anyway).
+        SendFileButton.IsEnabled = filesOk;
+        SendFileButton.ToolTip = filesOk ? null : "File transfer is turned off by your administrator.";
 
         (ClipTitle.Text, ClipDetail.Text) = caps.Clipboard.State switch
         {
@@ -701,6 +709,8 @@ public partial class ShellWindow : Window
         _hideTimer.Stop();
         _hotKeys?.Dispose();
         _switcher?.Close();
+        _consent?.Close();
+        _banner?.Close();
         base.OnClosed(e);
     }
 }

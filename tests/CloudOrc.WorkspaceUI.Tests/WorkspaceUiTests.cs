@@ -245,3 +245,39 @@ public class TimeTextTests
         Assert.Equal("2 d ago", TimeText.Ago(now.AddDays(-2), now));
     }
 }
+
+public class AssistancePolicyTests
+{
+    private static readonly DateTimeOffset T0 = new(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
+    private static AssistanceRequest R(string status, int leaseMin = 15) => new() { Id = "a1", Status = status, LeaseExpiresAt = T0.AddMinutes(leaseMin) };
+
+    [Fact]
+    public void Pending_request_asks_for_consent() =>
+        Assert.Equal(AssistancePolicy.Step.AskConsent, AssistancePolicy.Next(R("PENDING"), false, null, null, T0));
+
+    [Fact]
+    public void Granted_without_shadow_shows_the_banner() =>
+        Assert.Equal(AssistancePolicy.Step.ShowBanner, AssistancePolicy.Next(R("GRANTED"), false, null, null, T0));
+
+    [Fact]
+    public void Shadow_seen_marks_active() =>
+        Assert.Equal(AssistancePolicy.Step.MarkActive, AssistancePolicy.Next(R("GRANTED"), true, T0, null, T0));
+
+    [Fact]
+    public void Lease_end_stops_access_even_while_shadowing() =>
+        Assert.Equal(AssistancePolicy.Step.EndLeaseExpired, AssistancePolicy.Next(R("ACTIVE"), true, T0, null, T0.AddMinutes(16)));
+
+    [Fact]
+    public void Shadow_gone_briefly_is_not_ended_but_gone_for_long_is() 
+    {
+        Assert.Equal(AssistancePolicy.Step.ShowBanner, AssistancePolicy.Next(R("ACTIVE"), false, T0, T0.AddSeconds(30), T0.AddSeconds(33)));
+        Assert.Equal(AssistancePolicy.Step.EndShadowGone, AssistancePolicy.Next(R("ACTIVE"), false, T0, T0.AddSeconds(30), T0.AddSeconds(40)));
+    }
+
+    [Theory]
+    [InlineData("DENIED")]
+    [InlineData("ENDED")]
+    [InlineData("EXPIRED")]
+    public void Closed_requests_do_nothing(string status) =>
+        Assert.Equal(AssistancePolicy.Step.None, AssistancePolicy.Next(R(status), false, null, null, T0));
+}
