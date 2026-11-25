@@ -84,6 +84,7 @@ public sealed class WorkspaceUiSupervisor(
         _loggedMissingExe = false;
         var live = sessions.GetUserSessions();
         var running = sessions.GetSessionsRunning(options.Value.ProcessName);
+        var desktops = sessions.GetSessionsRunning("explorer");
         var report = new List<WorkspaceSessionHealth>();
 
         foreach (var s in live)
@@ -102,7 +103,7 @@ public sealed class WorkspaceUiSupervisor(
                 continue;
             }
 
-            var obs = new SessionObservation(s.SessionId, s.Username, s.LogonTime, uiRunning, ReadStateFile(s.SessionId));
+            var obs = new SessionObservation(s.SessionId, s.Username, s.LogonTime, uiRunning, ReadStateFile(s.SessionId), desktops.Contains(s.SessionId));
             var decision = _policy.Decide(obs, tracker, now);
             switch (decision.Action)
             {

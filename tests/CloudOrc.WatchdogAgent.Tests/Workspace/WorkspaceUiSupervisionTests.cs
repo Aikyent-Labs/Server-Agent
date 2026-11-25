@@ -43,6 +43,16 @@ public class WorkspaceUiRecoveryPolicyTests
     }
 
     [Fact]
+    public void Starts_at_once_in_a_session_without_a_desktop_shell()
+    {
+        // TSPlus .connect Remote App / HTML5 web / Floating Panel: no explorer.exe, so no Run key fires.
+        var p = new WorkspaceUiRecoveryPolicy(Options());
+        var t = new WorkspaceUiRecoveryPolicy.Tracker { FirstSeenAt = T0 };
+        var noDesktop = new SessionObservation(2, "ravi", T0.AddMinutes(-1), false, null, HasDesktopShell: false);
+        Assert.Equal(WorkspaceUiAction.Start, p.Decide(noDesktop, t, T0.AddSeconds(1)).Action);
+    }
+
+    [Fact]
     public void Restarts_a_crashed_panel_immediately_then_backs_off()
     {
         var p = new WorkspaceUiRecoveryPolicy(Options());
@@ -175,7 +185,11 @@ public class WorkspaceUiSupervisorTests : IDisposable
         public bool StartSucceeds { get; set; } = true;
 
         public IReadOnlyList<InteractiveSession> GetUserSessions() => Sessions;
-        public IReadOnlyCollection<int> GetSessionsRunning(string processName) => Running;
+        /// <summary>Sessions with explorer.exe (a desktop). Null = every session has a desktop.</summary>
+        public HashSet<int>? Desktops { get; set; }
+
+        public IReadOnlyCollection<int> GetSessionsRunning(string processName) =>
+            processName == "explorer" ? (Desktops ?? Sessions.Select(s => s.SessionId).ToHashSet()) : Running;
         public string? GetSessionUserSid(int sessionId) => null;
 
         public List<int> RecoverStarts { get; } = [];
@@ -197,11 +211,25 @@ public class WorkspaceUiSupervisorTests : IDisposable
         }
     }
 
-    private WorkspaceUiSupervisor Create(FakeHost host, ManualTimeProvider time) =>
+    [Fact]
+    public void Starts_the_panel_on_the_first_tick_in_a_session_without_a_desktop()
+    {
+        // Real 60 s grace: a desktop session waits for the Run key, a RemoteApp/web session does not.
+        var host = new FakeHost { Desktops = [5] };
+        host.Sessions.Add(new InteractiveSession(5, "desk", "VPS", null, Active: true));
+        host.Sessions.Add(new InteractiveSession(7, "sayjaan1", "VPS", null, Active: true));
+        var sup = Create(host, new ManualTimeProvider(DateTimeOffset.UtcNow), graceSeconds: 60);
+
+        sup.Tick();
+
+        Assert.Equal([7], host.Started);
+    }
+
+    private WorkspaceUiSupervisor Create(FakeHost host, ManualTimeProvider time, int graceSeconds = 0) =>
         new(Microsoft.Extensions.Options.Options.Create(new WorkspaceUiOptions
         {
             ExecutablePath = Path.Combine(_dir, "CloudOrc.WorkspaceUI.exe"),
-            StartGraceSeconds = 0,
+            StartGraceSeconds = graceSeconds,
             CrashLoopThreshold = 3,
             CrashLoopWindowMinutes = 10,
             RestartBackoffSeconds = 1,

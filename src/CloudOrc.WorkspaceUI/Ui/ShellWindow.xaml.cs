@@ -68,7 +68,11 @@ public partial class ShellWindow : Window
         MouseEnter += (_, _) => _leftAt = DateTime.MaxValue;
         MouseLeave += (_, _) => _leftAt = DateTime.UtcNow;
         PreviewKeyDown += OnPreviewKeyDown;
-        _hideTimer.Tick += (_, _) => CheckAutoHide();
+        _hideTimer.Tick += (_, _) =>
+        {
+            KeepPlacedAndOnTop();
+            CheckAutoHide();
+        };
         _toastTimer.Tick += (_, _) => { ToastBar.Visibility = Visibility.Collapsed; _toastTimer.Stop(); };
 
         _c.PropertyChanged += OnControllerChanged;
@@ -197,9 +201,57 @@ public partial class ShellWindow : Window
         _leftAt = IsMouseOver ? DateTime.MaxValue : DateTime.UtcNow;
     }
 
+    private Rect _placedFor = Rect.Empty;
+    private DateTime _lastOnTop = DateTime.MinValue;
+
+    /// <summary>
+    /// Every timer tick: follow the screen when its size changes (a RemoteApp / web session gets the
+    /// user's real screen size only after sign-in, which left the rail in the middle), and every 2 s put
+    /// the panel back on top of windows TSPlus creates later.
+    /// </summary>
+    /// <summary>
+    /// The live work area straight from Windows (in DIPs). WPF's SystemParameters.WorkArea is cached and is
+    /// not always refreshed when a RemoteApp / web session takes the client's screen size after sign-in.
+    /// </summary>
+    private Rect CurrentWorkArea()
+    {
+        try
+        {
+            if (SystemParametersInfo(0x0030 /* SPI_GETWORKAREA */, 0, out var r, 0))
+            {
+                var dpi = VisualTreeHelper.GetDpi(this);
+                return new Rect(r.Left / dpi.DpiScaleX, r.Top / dpi.DpiScaleY, (r.Right - r.Left) / dpi.DpiScaleX, (r.Bottom - r.Top) / dpi.DpiScaleY);
+            }
+        }
+        catch
+        {
+            // fall back to WPF's value
+        }
+
+        return SystemParameters.WorkArea;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct NativeRect { public int Left, Top, Right, Bottom; }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SystemParametersInfo(int action, int param, out NativeRect rect, int winIni);
+
+    private void KeepPlacedAndOnTop()
+    {
+        var area = CurrentWorkArea();
+        if (area != _placedFor) Reposition();
+        if (DateTime.UtcNow - _lastOnTop >= TimeSpan.FromSeconds(2))
+        {
+            _lastOnTop = DateTime.UtcNow;
+            WindowStyles.KeepOnTop(_hwnd);
+        }
+    }
+
     private void Reposition()
     {
-        var rect = PanelLayout.Compute(SystemParameters.WorkArea, _mode, _leftSide, _railButtons.Count);
+        _placedFor = CurrentWorkArea();
+        var rect = PanelLayout.Compute(_placedFor, _mode, _leftSide, _railButtons.Count);
         Left = rect.Left;
         Top = rect.Top;
         Width = rect.Width;

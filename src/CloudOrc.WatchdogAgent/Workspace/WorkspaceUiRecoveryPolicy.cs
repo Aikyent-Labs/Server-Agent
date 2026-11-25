@@ -18,7 +18,8 @@ public sealed record SessionObservation(
     string Username,
     DateTimeOffset? LogonTime,
     bool UiRunning,
-    WorkspaceSessionState? StateFile);
+    WorkspaceSessionState? StateFile,
+    bool HasDesktopShell = true);
 
 /// <summary>
 /// Pure decision logic for one session (unit-tested). Handoff §31.1 / §48:
@@ -99,7 +100,10 @@ public sealed class WorkspaceUiRecoveryPolicy(WorkspaceUiOptions options)
             t.Restarts.Clear();
         }
 
-        if (!t.SeenRunning && now - t.FirstSeenAt < TimeSpan.FromSeconds(Math.Max(0, options.StartGraceSeconds)))
+        // Grace only where the HKLM Run entry will start the panel: a desktop session (explorer.exe). TSPlus
+        // .connect Remote App, HTML5 web and Floating Panel sessions have no explorer, so nothing else starts
+        // the panel there - start it at once, before the user reaches for the TSPlus panel.
+        if (s.HasDesktopShell && !t.SeenRunning && now - t.FirstSeenAt < TimeSpan.FromSeconds(Math.Max(0, options.StartGraceSeconds)))
         {
             return new WorkspaceUiDecision(WorkspaceUiAction.Wait, WorkspaceComponentStatus.Unknown, null, "waiting for logon start");
         }

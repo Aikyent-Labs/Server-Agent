@@ -69,6 +69,18 @@ public static class WindowStyles
     }
 
     /// <summary>While collapsed the panel never takes focus from Tally; expanded it may (user gesture).</summary>
+    /// <summary>
+    /// Put the window back at the top of the topmost band without activating or moving it. TSPlus creates
+    /// its own topmost windows (floating panel, the full-screen "Talisman" backdrop) after sign-in, which
+    /// would otherwise cover the panel until the user clicks something.
+    /// </summary>
+    public static void KeepOnTop(IntPtr hwnd)
+    {
+        if (hwnd != IntPtr.Zero) SetWindowPos(hwnd, new IntPtr(-1) /* HWND_TOPMOST */, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010 /* NOSIZE|NOMOVE|NOACTIVATE */);
+    }
+
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+
     public static void SetNoActivate(IntPtr hwnd, bool noActivate)
     {
         var ex = (long)GetWindowLongPtr(hwnd, GWL_EXSTYLE);
