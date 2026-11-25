@@ -24,6 +24,9 @@ public sealed class GovernorSession : IAsyncDisposable
     private ResourceSample? _latest;
     private long _lastCpuTime;
     private long _lastCpuTicks;
+    // A previous CPU reading exists. Not "_lastCpuTime > 0": a just-started, idle worker can
+    // legitimately report 0 CPU time on its first sample, which must still count as a baseline.
+    private bool _hasCpuBaseline;
     private bool _diskCapWarned;
     private bool _diskCapAvailable = true;
 
@@ -144,11 +147,12 @@ public sealed class GovernorSession : IAsyncDisposable
         var usage = _job.QueryUsage();
         var nowTicks = Stopwatch.GetTimestamp();
         var wall100Ns = (nowTicks - _lastCpuTicks) * 10_000_000.0 / Stopwatch.Frequency;
-        double? workerCpu = wall100Ns > 0 && _lastCpuTime > 0
+        double? workerCpu = wall100Ns > 0 && _hasCpuBaseline
             ? Math.Round((usage.TotalCpuTime100Ns - _lastCpuTime) / (wall100Ns * Environment.ProcessorCount) * 100, 1)
             : null;
         _lastCpuTime = usage.TotalCpuTime100Ns;
         _lastCpuTicks = nowTicks;
+        _hasCpuBaseline = true;
 
         using var self = Process.GetCurrentProcess();
         var sample = new ResourceSample
