@@ -124,6 +124,29 @@ public sealed class TsplusPanelHider
         }
     }
 
+    /// <summary>
+    /// A TSPlus panel (FloatingPanel, or the "Remote App" panel of .connect / HTML5 sessions) exists in this
+    /// session — visible or already hidden by us. Means the user works from a launcher panel.
+    /// </summary>
+    public bool HasPanelWindow()
+    {
+        lock (_sync)
+        {
+            if (_cloaked.Keys.Any(IsWindow)) return true;
+        }
+
+        foreach (var (p, title) in TargetProcesses())
+        {
+            using (p)
+            {
+                if (p.SessionId != _session) continue;
+                if (TopLevelWindows(p.Id).Any(h => IsWindowVisible(h) && TitleMatches(h, title))) return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>Restores every window this panel cloaked (policy off / exit / crash).</summary>
     public void RestoreAll()
     {

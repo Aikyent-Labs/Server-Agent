@@ -37,6 +37,16 @@ public partial class ShellWindow : Window
     private HotKeys? _hotKeys;
     private IntPtr _hwnd;
     private PanelMode _mode = PanelMode.Handle;
+
+    /// <summary>
+    /// The icon rail stays visible at the screen edge by default (like the TSPlus floating panel); the
+    /// user can hide it to a slim edge handle with the arrow and bring it back by clicking the handle.
+    /// Remembered per Windows user.
+    /// </summary>
+    private bool _railDocked = RailPreference.LoadDocked();
+
+    /// <summary>Where the panel rests when not expanded: the docked rail, or only the edge handle.</summary>
+    private PanelMode RestMode => _railDocked ? PanelMode.Rail : PanelMode.Handle;
     private string _tab = "apps";
     private DateTime _leftAt = DateTime.UtcNow;
     private DateTime? _criticalUntil;
@@ -54,7 +64,7 @@ public partial class ShellWindow : Window
 
         SourceInitialized += OnSourceInitialized;
         Handle.MouseEnter += (_, _) => { if (_mode == PanelMode.Handle) SetMode(PanelMode.Rail); };
-        Handle.MouseLeftButtonUp += (_, _) => Open(_tab);
+        Handle.MouseLeftButtonUp += (_, _) => DockRail(true);
         MouseEnter += (_, _) => _leftAt = DateTime.MaxValue;
         MouseLeave += (_, _) => _leftAt = DateTime.UtcNow;
         PreviewKeyDown += OnPreviewKeyDown;
@@ -78,6 +88,7 @@ public partial class ShellWindow : Window
         };
 
         BuildRail();
+        UpdateRailToggle();
         UpdateCapabilities();
         UpdateConnectionDot();
     }
@@ -92,7 +103,7 @@ public partial class ShellWindow : Window
         {
             if (id == HotKeys.TogglePanelId)
             {
-                if (_mode == PanelMode.Expanded) SetMode(PanelMode.Handle);
+                if (_mode == PanelMode.Expanded) SetMode(RestMode);
                 else Open(_tab);
             }
             else if (id == HotKeys.SwitcherId)
@@ -102,7 +113,7 @@ public partial class ShellWindow : Window
         };
         HwndSource.FromHwnd(_hwnd).AddHook(OnPanelCommand);
         _hideTimer.Start();
-        SetMode(PanelMode.Handle);
+        SetMode(RestMode);
     }
 
     /// <summary>"open:&lt;tab&gt;" | "close" | "switcher" from a same-session shortcut (see PanelCommand).</summary>
@@ -122,7 +133,7 @@ public partial class ShellWindow : Window
                 _leftAt = DateTime.UtcNow.AddSeconds(10);
             }
             else if (cmd.StartsWith("snapshot:", StringComparison.Ordinal)) SaveSnapshot(cmd[9..]);
-            else if (cmd == "close") SetMode(PanelMode.Handle);
+            else if (cmd == "close") SetMode(RestMode);
             else if (cmd == "switcher") OpenSwitcher();
         });
         return new IntPtr(1);
@@ -204,7 +215,7 @@ public partial class ShellWindow : Window
 
     private void CheckAutoHide()
     {
-        if (_mode == PanelMode.Handle) return;
+        if (_mode == RestMode || _mode == PanelMode.Handle) return;
         var critical = _criticalUntil is { } until && DateTime.UtcNow < until;
         var idle = _leftAt == DateTime.MaxValue ? TimeSpan.Zero : DateTime.UtcNow - _leftAt;
         var delay = TimeSpan.FromSeconds(_mode == PanelMode.Rail ? Math.Min(2, AutoHideSeconds) : AutoHideSeconds);
@@ -218,7 +229,7 @@ public partial class ShellWindow : Window
                 idle,
                 delay))
         {
-            SetMode(PanelMode.Handle);
+            SetMode(RestMode);
         }
     }
 
@@ -241,7 +252,7 @@ public partial class ShellWindow : Window
     {
         if (e.Key == Key.Escape && ConfirmOverlay.Visibility != Visibility.Visible && OtpOverlay.Visibility != Visibility.Visible)
         {
-            SetMode(PanelMode.Handle);
+            SetMode(RestMode);
             e.Handled = true;
         }
     }
@@ -422,7 +433,30 @@ public partial class ShellWindow : Window
 
     private void OnLogoClick(object sender, RoutedEventArgs e) => Open("apps");
 
-    private void OnCollapseClick(object sender, RoutedEventArgs e) => SetMode(PanelMode.Handle);
+    private void OnCollapseClick(object sender, RoutedEventArgs e) => SetMode(RestMode);
+
+    /// <summary>
+    /// Rail arrow: docked → "›" hides the rail to the edge; hidden (rail only shown while hovering) →
+    /// "‹" keeps it visible at the edge again.
+    /// </summary>
+    private void OnHideRailClick(object sender, RoutedEventArgs e) => DockRail(!_railDocked);
+
+    private void UpdateRailToggle()
+    {
+        HideRailGlyph.Text = _railDocked ? "" : ""; // chevron right / chevron left
+        var label = _railDocked ? "Hide to edge" : "Keep visible";
+        HideRailButton.ToolTip = _railDocked ? "Hide to the edge (point at the edge to see it)" : "Keep the panel visible at the edge";
+        System.Windows.Automation.AutomationProperties.SetName(HideRailButton, label);
+    }
+
+    /// <summary>Show the rail permanently at the edge (true) or hide it to the edge handle (false).</summary>
+    private void DockRail(bool docked)
+    {
+        _railDocked = docked;
+        RailPreference.SaveDocked(docked);
+        UpdateRailToggle();
+        SetMode(RestMode);
+    }
 
     private void OnPinClick(object sender, RoutedEventArgs e)
     {
@@ -503,7 +537,7 @@ public partial class ShellWindow : Window
             Log.Write($"show desktop: {ex.Message}");
         }
 
-        SetMode(PanelMode.Handle);
+        SetMode(RestMode);
     }
 
     private void OnSwitcherClick(object sender, RoutedEventArgs e) => OpenSwitcher();
@@ -724,7 +758,7 @@ public partial class ShellWindow : Window
         if (!_closeAllowed && _c.IsSeamless)
         {
             e.Cancel = true;
-            SetMode(PanelMode.Handle);
+            SetMode(RestMode);
             return;
         }
 

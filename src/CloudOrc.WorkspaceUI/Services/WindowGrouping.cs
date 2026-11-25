@@ -30,6 +30,8 @@ public sealed class AppWindowGroup
 /// </summary>
 public static class WindowGrouping
 {
+    private static string FolderKey(string? path) => (path ?? string.Empty).Trim().Trim('"').TrimEnd('\\').Trim();
+
     public static IReadOnlyList<AppWindowGroup> Group(IEnumerable<TopWindow> windows, IReadOnlyList<PublishedApp> published)
     {
         var byExe = new Dictionary<string, PublishedApp>(StringComparer.OrdinalIgnoreCase);
@@ -41,6 +43,14 @@ public static class WindowGrouping
             byFileName.TryAdd(Path.GetFileName(full), app);
         }
 
+        // TSPlus folders all open through the same launcher (folder.exe): its window title is the folder path,
+        // so a folder window belongs to the published folder entry whose cmdline is that path.
+        var byFolderPath = new Dictionary<string, PublishedApp>(StringComparer.OrdinalIgnoreCase);
+        foreach (var app in published.Where(a => a.IsFolder && TsplusAppSource.IsFolderLauncher(a.ExePath)))
+        {
+            byFolderPath.TryAdd(FolderKey(app.Arguments), app);
+        }
+
         var groups = new Dictionary<string, (string Name, PublishedApp? App, string? Exe, List<TopWindow> Windows)>(StringComparer.OrdinalIgnoreCase);
         foreach (var w in windows)
         {
@@ -48,7 +58,11 @@ public static class WindowGrouping
             if (w.ExePath is { Length: > 0 } exe)
             {
                 var n = Normalize(exe);
-                if (!byExe.TryGetValue(n, out app))
+                if (TsplusAppSource.IsFolderLauncher(n))
+                {
+                    byFolderPath.TryGetValue(FolderKey(w.Title), out app);
+                }
+                else if (!byExe.TryGetValue(n, out app))
                 {
                     // Same exe name in a different folder (e.g. Tally copied per company) still maps.
                     byFileName.TryGetValue(Path.GetFileName(n), out app);

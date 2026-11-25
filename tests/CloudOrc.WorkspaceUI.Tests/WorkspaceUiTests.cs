@@ -47,6 +47,24 @@ public class WindowGroupingTests
     }
 
     [Fact]
+    public void TSPlus_folder_windows_map_to_their_own_folder_entry()
+    {
+        const string launcher = @"C:\Program Files (x86)\TSplus\UserDesktop\files\folder.exe";
+        PublishedApp[] folders =
+        [
+            new() { Id = "tsplus:App21", Name = "Export", Type = "folder", ExePath = launcher, Arguments = @"E:\SAYJAAN\Export" },
+            new() { Id = "tsplus:App22", Name = "Data", Type = "folder", ExePath = launcher, Arguments = "\"E:\\SAYJAAN\\Data\\\"" },
+        ];
+        var groups = WindowGrouping.Group(
+        [
+            new TopWindow(1, 1, launcher, @"E:\SAYJAAN\Export", WindowState2.Running),
+            new TopWindow(2, 2, launcher, @"E:\SAYJAAN\Data", WindowState2.Running),
+        ], folders);
+        Assert.Equal(["tsplus:App21", "tsplus:App22"], groups.Select(g => g.PublishedAppId).OrderBy(x => x).ToArray());
+        Assert.Contains(groups, g => g.Name == "Export");
+    }
+
+    [Fact]
     public void Title_is_display_only_never_identity()
     {
         var groups = WindowGrouping.Group([new TopWindow(1, 1, @"C:\Windows\notepad.exe", "TallyPrime", WindowState2.Running)], Apps);

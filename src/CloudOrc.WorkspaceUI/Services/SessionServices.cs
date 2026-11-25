@@ -162,7 +162,12 @@ public static class SessionActions
         return false;
     }
 
-    private static readonly string[] SeamlessShellProcesses = ["rdpinit", "rdpshell"];
+    /// <summary>
+    /// RemoteApp shell (rdpinit/rdpshell) or the TSPlus floating panel running in the session: either way
+    /// the user works from a launcher panel instead of a desktop (TSPlus .connect Remote App, HTML5 web
+    /// sessions, Floating Panel seats), so this panel takes over that role.
+    /// </summary>
+    private static readonly string[] SeamlessShellProcesses = ["rdpinit", "rdpshell", "floatingpanel"];
 
     /// <summary>
     /// True when the signed-in Windows account is a member of the server's local Administrators group

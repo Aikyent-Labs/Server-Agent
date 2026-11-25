@@ -223,7 +223,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
 
     public bool HasPublishedApps => PublishedApps.Count > 0;
 
-    private bool _seamless = SessionActions.IsSeamlessSession();
+    private bool _seamless = SessionActions.IsSeamlessSession() || TsplusPanelHider.Instance.HasPanelWindow();
     /// <summary>
     /// RemoteApp / seamless session (TSPlus .connect "Remote App", .rdp RemoteApp, HTML5 RemoteApp): the
     /// user has no remote desktop, taskbar or Start menu, so this panel is their launcher — published apps
@@ -238,17 +238,26 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         : "Tip: Alt+Tab works as usual. In a windowed RDP client use Alt+Page Up / Alt+Page Down.";
     public bool CanHideForSession => !IsSeamless;
 
-    private void UpdateSeamless() => IsSeamless = SessionActions.IsSeamlessSession();
+    private void UpdateSeamless() => IsSeamless = SessionActions.IsSeamlessSession() || TsplusPanelHider.Instance.HasPanelWindow();
 
     /// <summary>
     /// Hide the TSPlus floating panel when the admin asked for it, or automatically in a seamless session —
     /// but only once this panel actually has apps to offer, so a user is never left with no way to open one.
     /// </summary>
+    private string? _lastHidingDecision;
+
     private void UpdateTsplusHiding()
     {
         var ctx = Context;
         if (ctx is null) return;
         var hide = ctx.WorkspaceEnabled && (ctx.HideTsplusPanel || (IsSeamless && HasPublishedApps));
+        var decision = $"launcherMode={IsSeamless} apps={PublishedApps.Count} hideTsplus={hide}";
+        if (decision != _lastHidingDecision)
+        {
+            _lastHidingDecision = decision;
+            Log.Write($"Panel mode: {decision}" + (IsSeamless && !HasPublishedApps ? " (TSPlus panel kept: no apps to offer)" : string.Empty));
+        }
+
         TsplusPanelHider.Instance.SetEnabled(hide);
     }
     public bool HasRunningApps => RunningApps.Count > 0;

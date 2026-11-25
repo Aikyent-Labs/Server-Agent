@@ -75,3 +75,29 @@ public static class TimeText
         return $"{(int)d.TotalDays} d ago";
     }
 }
+
+/// <summary>Per-user "rail docked at the edge" choice (%LocalAppData%\CloudOrc\WorkspaceUI\rail.txt). Default: docked.</summary>
+public static class RailPreference
+{
+    private static string FilePath => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CloudOrc", "WorkspaceUI", "rail.txt");
+
+    public static bool LoadDocked()
+    {
+        try { return !System.IO.File.Exists(FilePath) || System.IO.File.ReadAllText(FilePath).Trim() != "hidden"; }
+        catch { return true; }
+    }
+
+    public static void SaveDocked(bool docked)
+    {
+        try
+        {
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(FilePath)!);
+            System.IO.File.WriteAllText(FilePath, docked ? "docked" : "hidden");
+        }
+        catch
+        {
+            // a preference that cannot be saved is simply not remembered
+        }
+    }
+}

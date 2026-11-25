@@ -36,6 +36,11 @@
         </Button>
         <Rectangle DockPanel.Dock="Top" Height="1" Fill="#334155" Margin="10,6"/>
         <StackPanel x:Name="RailItemsHost" DockPanel.Dock="Top"/>
+        <!-- Hide the rail to the screen edge (like the TSPlus panel's arrow). Click the edge handle to bring it back. -->
+        <Button x:Name="HideRailButton" DockPanel.Dock="Bottom" Style="{StaticResource RailButton}" Click="OnHideRailClick"
+                ToolTip="Hide to the edge (click the edge to show again)" AutomationProperties.Name="Hide to edge">
+          <TextBlock x:Name="HideRailGlyph" Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="16"/>
+        </Button>
       </DockPanel>
     </Border>
 
