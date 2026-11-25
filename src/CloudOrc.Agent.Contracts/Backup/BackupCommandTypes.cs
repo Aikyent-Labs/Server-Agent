@@ -71,6 +71,9 @@ public static class AgentCapabilities
     public const string DurableEventsV1 = "durable-events.v1";
     public const string DiscoveryV1 = "discovery.v1";
 
+    /// <summary>Serves the Remote Workspace panel pipe + token broker (handoff v1.2 §47).</summary>
+    public const string WorkspaceUiV1 = "workspace-ui.v1";
+
     /// <summary>Can install the separate CloudOrc Backup Agent (agent.backup-agent.install).</summary>
     public const string BackupAgentInstallV1 = "backup-agent-install.v1";
 

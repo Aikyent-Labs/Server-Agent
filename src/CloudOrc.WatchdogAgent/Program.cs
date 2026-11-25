@@ -58,6 +58,13 @@ builder.Services.AddSingleton<RecoveryRateLimiter>();
 
 builder.Services.AddHostedService<WatchdogMonitorService>();
 
+// Remote Workspace panel supervision (handoff v1.2 §31, §48). Idle when the panel is not installed.
+builder.Services.Configure<CloudOrc.WatchdogAgent.Workspace.WorkspaceUiOptions>(
+    builder.Configuration.GetSection(CloudOrc.WatchdogAgent.Workspace.WorkspaceUiOptions.SectionName));
+builder.Services.AddSingleton<CloudOrc.WatchdogAgent.Workspace.ISessionHost, CloudOrc.WatchdogAgent.Workspace.WindowsSessionHost>();
+builder.Services.AddSingleton<CloudOrc.WatchdogAgent.Workspace.LastKnownGoodStore>();
+builder.Services.AddHostedService<CloudOrc.WatchdogAgent.Workspace.WorkspaceUiSupervisor>();
+
 var host = builder.Build();
 
 try

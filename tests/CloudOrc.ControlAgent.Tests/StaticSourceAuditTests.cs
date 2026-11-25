@@ -108,7 +108,10 @@ public class StaticSourceAuditTests
     /// they enforce RDP *session policy* (clipboard/drive redirection restrictions) via
     /// Windows registry, the same mechanism Group Policy uses - they are not a remote
     /// execution transport and do not touch BackendConnectionService's WSS-only command
-    /// channel. Everywhere else in src/ and installer/ remains fully covered.
+    /// channel. src/CloudOrc.WorkspaceUI/ (the per-user Remote Workspace panel) is the second
+    /// narrow exception: it only shows end-user help text about native RDP client shortcuts
+    /// (handoff v1.2 §42) and runs no transport. Everywhere else in src/ and installer/ remains
+    /// fully covered.
     /// </summary>
     [Fact]
     public void SourceCode_HasNoRdpDependencyOutsideTransferPolicyFeature()
@@ -119,6 +122,7 @@ public class StaticSourceAuditTests
             $"{Path.DirectorySeparatorChar}CommandTypes.cs",
             $"{Path.DirectorySeparatorChar}IRdpTransferPolicyExecutor.cs",
             $"{Path.DirectorySeparatorChar}RdpTransferPolicyOutcome.cs",
+            $"{Path.DirectorySeparatorChar}CloudOrc.WorkspaceUI{Path.DirectorySeparatorChar}",
         };
 
         var offenders = ScannedFiles()

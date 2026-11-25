@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    CloudOrc Remote Workspace floating panel (handoff v1.2 §27, §41-49, RW-01..RW-09).
+    One process per interactive Windows user session, started by the logon Run key and
+    supervised by CloudOrc Watch. Runs as the logged-on user; never privileged.
+
+    Like the tray, it has NO ProjectReference to the agent core: the IPC contract is linked as
+    source from CloudOrc.Agent.Contracts/Workspace/WorkspaceProtocol.cs (single source of truth,
+    no assembly dependency).
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CloudOrc.WorkspaceUI</RootNamespace>
+    <AssemblyName>CloudOrc.WorkspaceUI</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>CloudOrc Remote Workspace</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\CloudOrc.Agent.Contracts\Workspace\WorkspaceProtocol.cs" Link="Protocol\WorkspaceProtocol.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- WPF projects do not get these implicit usings. -->
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CloudOrc.WorkspaceUI.Tests" />
+  </ItemGroup>
+
+</Project>

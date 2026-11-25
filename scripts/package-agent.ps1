@@ -173,6 +173,7 @@ $watchdogAgentOut = Join-Path $packageRoot "WatchdogAgent"
 $backupWorkerOut = Join-Path $packageRoot "BackupWorker"
 $updaterOut = Join-Path $packageRoot "Updater"
 $trayOut = Join-Path $packageRoot "Tray"
+$workspaceUiOut = Join-Path $packageRoot "WorkspaceUI"
 $enginesOut = Join-Path $packageRoot "Engines"
 New-Item -ItemType Directory -Force -Path $controlAgentOut | Out-Null
 New-Item -ItemType Directory -Force -Path $watchdogAgentOut | Out-Null
@@ -198,6 +199,7 @@ if ($LASTEXITCODE -ne 0) { Fail "Publishing Watchdog Agent failed (exit code $LA
 $backupWorkerProject = Join-Path $repoRoot "src\CloudOrc.BackupWorker\CloudOrc.BackupWorker.csproj"
 $updaterProject = Join-Path $repoRoot "src\CloudOrc.Agent.Updater\CloudOrc.Agent.Updater.csproj"
 $trayProject = Join-Path $repoRoot "src\CloudOrc.Agent.Tray\CloudOrc.Agent.Tray.csproj"
+$workspaceUiProject = Join-Path $repoRoot "src\CloudOrc.WorkspaceUI\CloudOrc.WorkspaceUI.csproj"
 
 Step "dotnet publish Backup Worker (win-x64, self-contained)"
 & dotnet publish "$backupWorkerProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$backupWorkerOut"
@@ -210,6 +212,11 @@ if ($LASTEXITCODE -ne 0) { Fail "Publishing Updater failed (exit code $LASTEXITC
 Step "dotnet publish Tray status app (win-x64, self-contained)"
 & dotnet publish "$trayProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$trayOut"
 if ($LASTEXITCODE -ne 0) { Fail "Publishing Tray failed (exit code $LASTEXITCODE)." }
+
+# Remote Workspace floating panel (handoff v1.2): per-user WPF app, supervised by the Watchdog.
+Step "dotnet publish Remote Workspace panel (win-x64, self-contained)"
+& dotnet publish "$workspaceUiProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$workspaceUiOut"
+if ($LASTEXITCODE -ne 0) { Fail "Publishing WorkspaceUI failed (exit code $LASTEXITCODE)." }
 
 # Engine binaries are third-party (Kopia / Restic / rclone). They are fetched and SHA-256
 # verified by scripts\fetch-engines.ps1 into engines\dist\ (which also writes the
@@ -241,10 +248,11 @@ Write-Host "  Watchdog Agent EXE: OK"
 foreach ($exe in @(
         (Join-Path $backupWorkerOut "CloudOrc.BackupWorker.exe"),
         (Join-Path $updaterOut "CloudOrc.Agent.Updater.exe"),
-        (Join-Path $trayOut "CloudOrc.Agent.Tray.exe"))) {
+        (Join-Path $trayOut "CloudOrc.Agent.Tray.exe"),
+        (Join-Path $workspaceUiOut "CloudOrc.WorkspaceUI.exe"))) {
     if (-not (Test-Path $exe)) { Fail "'$exe' was not published." }
 }
-Write-Host "  Backup Worker / Updater / Tray EXEs: OK"
+Write-Host "  Backup Worker / Updater / Tray / WorkspaceUI EXEs: OK"
 
 foreach ($dir in @($controlAgentOut, $watchdogAgentOut)) {
     if (-not (Test-Path (Join-Path $dir "hostfxr.dll"))) { Fail "'$dir' is missing hostfxr.dll - this is not a self-contained publish." }

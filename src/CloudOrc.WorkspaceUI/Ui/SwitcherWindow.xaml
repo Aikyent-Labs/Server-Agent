@@ -1,0 +1,56 @@
+<Window x:Class="CloudOrc.WorkspaceUI.Ui.SwitcherWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CloudOrc app switcher" WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ResizeMode="NoResize" SizeToContent="WidthAndHeight"
+        WindowStartupLocation="CenterScreen" AutomationProperties.Name="App switcher">
+  <Border Background="#F20F172A" CornerRadius="14" Padding="18" MaxWidth="900">
+    <StackPanel>
+      <DockPanel Margin="0,0,0,12">
+        <TextBlock DockPanel.Dock="Right" Foreground="#94A3B8" FontSize="11.5" VerticalAlignment="Center"
+                   Text="Enter to switch · Esc to close · Alt+Tab still works"/>
+        <TextBlock Foreground="White" FontSize="15" FontWeight="SemiBold" Text="Switch to"/>
+      </DockPanel>
+      <TextBlock x:Name="EmptyText" Foreground="#CBD5E1" FontSize="13" Text="No application windows are open." Visibility="Collapsed"/>
+      <ListBox x:Name="List" Background="Transparent" BorderThickness="0" KeyDown="OnListKeyDown" MouseLeftButtonUp="OnListClick"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled" AutomationProperties.Name="Open windows">
+        <ListBox.ItemsPanel>
+          <ItemsPanelTemplate><WrapPanel MaxWidth="860"/></ItemsPanelTemplate>
+        </ListBox.ItemsPanel>
+        <ListBox.ItemContainerStyle>
+          <Style TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="4"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding Title}"/>
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                  <Border x:Name="Bd" Width="196" Height="112" CornerRadius="10" Background="#1E293B" BorderThickness="2" BorderBrush="Transparent" Padding="12">
+                    <ContentPresenter/>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Bd" Property="Background" Value="#334155"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="Bd" Property="BorderBrush" Value="#3B82F6"/></Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </ListBox.ItemContainerStyle>
+        <ListBox.ItemTemplate>
+          <DataTemplate>
+            <StackPanel>
+              <StackPanel Orientation="Horizontal">
+                <Image Source="{Binding Icon}" Width="24" Height="24" Margin="0,0,8,0"/>
+                <TextBlock Text="{Binding AppName}" Foreground="#93C5FD" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+              <TextBlock Text="{Binding Title}" Foreground="White" FontSize="13" Margin="0,10,0,4" TextWrapping="Wrap" MaxHeight="36" TextTrimming="CharacterEllipsis"/>
+              <TextBlock Text="{Binding State}" Foreground="#94A3B8" FontSize="11"/>
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </StackPanel>
+  </Border>
+</Window>

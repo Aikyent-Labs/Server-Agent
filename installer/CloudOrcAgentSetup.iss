@@ -55,6 +55,9 @@
 #ifndef TraySourceDir
   #define TraySourceDir "..\dist\CloudOrcAgents-win-x64\Tray"
 #endif
+#ifndef WorkspaceUiSourceDir
+  #define WorkspaceUiSourceDir "..\dist\CloudOrcAgents-win-x64\WorkspaceUI"
+#endif
 
 #define MyAppName "CloudOrc Agent"
 #define MyAppPublisher "CloudOrc"
@@ -103,6 +106,9 @@ Name: "watchdogagent"; Description: "CloudOrc Watchdog Agent"; Types: full custo
 ; Optional desktop status icon (CO-DEV-BKP-001 section 4). Off by default: headless servers
 ; need no UI dependency at all.
 Name: "tray"; Description: "CloudOrc status icon for signed-in users (optional)"; Types: custom
+; Remote Workspace floating panel (handoff v1.2). Off by default; enabled per pilot server.
+; The Watchdog supervises it per user session (restart with backoff, crash-loop breaker).
+Name: "workspace"; Description: "CloudOrc Remote Workspace panel for signed-in users (pilot)"; Types: custom
 
 [Types]
 Name: "full"; Description: "Full installation (Control Agent + Watchdog Agent)"
@@ -118,9 +124,12 @@ Source: "{#BackupWorkerSourceDir}\*"; DestDir: "{app}\BackupWorker"; Flags: igno
 Source: "{#EnginesSourceDir}\*"; DestDir: "{app}\Engines"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: controlagent
 Source: "{#UpdaterSourceDir}\*"; DestDir: "{app}\Updater"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: controlagent
 Source: "{#TraySourceDir}\*"; DestDir: "{app}\Tray"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: tray
+Source: "{#WorkspaceUiSourceDir}\*"; DestDir: "{app}\WorkspaceUI"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: workspace
 
 [Registry]
 ; Start the status icon for every user who signs in (only when the tray component is chosen).
+; Start the Remote Workspace panel for every user who signs in (Watchdog restarts it if it crashes).
+Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "CloudOrcWorkspaceUI"; ValueData: """{app}\WorkspaceUI\CloudOrc.WorkspaceUI.exe"""; Flags: uninsdeletevalue; Components: workspace
 Root: HKLM; Subkey: "SOFTWARE\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "CloudOrcAgentTray"; ValueData: """{app}\Tray\CloudOrc.Agent.Tray.exe"""; Flags: uninsdeletevalue; Components: tray
 ; cloudorc://activate?code=... deep links from the portal (section 4 "approves deep link"). The
 ; tray always asks the user to approve before activating.

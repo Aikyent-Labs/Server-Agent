@@ -242,6 +242,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<CoreBudgetMonitor>
 // ---- Local status IPC for the optional tray (§4): works enrolled or not.
 builder.Services.AddSingleton<ActivationService>();
 builder.Services.AddHostedService<AgentStatusPipeServer>();
+// Remote Workspace floating panel (handoff v1.2 §47): per-user WorkspaceUI talks to this pipe.
+builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.WorkspaceHeartbeats>();
+builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.WorkspacePipeServer>();
 builder.Services.AddSingleton<ICommandQueue, InMemoryCommandQueue>();
 builder.Services.AddSingleton<IPowerShellExecutor, PowerShellCommandExecutor>();
 builder.Services.AddSingleton<IRdpOsBuildDetector, WindowsRdpOsBuildDetector>();
@@ -276,6 +279,13 @@ if (backendOptions.Enabled)
     builder.Services.AddSingleton<CertificateRotationService>();
     builder.Services.AddHostedService(sp => sp.GetRequiredService<CertificateRotationService>());
     builder.Services.AddSingleton<ITypedCommandHandler, CertificateRenewHandler>();
+
+    // ---- Remote Workspace: short-lived WorkspaceUI token + per-session panel health.
+    builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.IWorkspaceTokenIssuer, CloudOrc.ControlAgent.Workspace.BackendWorkspaceTokenIssuer>();
+    builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.WorkspaceTokenBroker>();
+    builder.Services.AddHostedService<CloudOrc.ControlAgent.Workspace.WorkspaceHealthReporter>();
+    builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspaceUiRestartHandler>();
+    builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspacePolicyRefreshHandler>();
 
     // ---- Durable outbox delivery (§11 at-least-once) + updater result reporting (§13).
     builder.Services.AddSingleton<OutboxDispatcherService>();

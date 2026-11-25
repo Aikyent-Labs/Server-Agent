@@ -19,7 +19,8 @@ public sealed class AgentCapabilitiesProvider : IAgentCapabilitiesProvider
         {
             AgentCapabilities.DurableEventsV1,
             AgentCapabilities.ActivationCodeV1,
-            AgentCapabilities.SessionRenewV1
+            AgentCapabilities.SessionRenewV1,
+            AgentCapabilities.WorkspaceUiV1
         };
 
         if (Directory.Exists(paths.UpdaterDirectory))
