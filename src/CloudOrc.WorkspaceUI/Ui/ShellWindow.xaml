@@ -15,7 +15,7 @@
     <!-- ============================ EDGE HANDLE (idle state) ============================ -->
     <Border x:Name="Handle" Grid.Column="1" Width="10" Height="96" CornerRadius="6,0,0,6"
             Background="{DynamicResource RailBg}" Opacity="0.85" Cursor="Hand"
-            ToolTip="CloudOrc (Ctrl+Alt+Shift+C)" AutomationProperties.Name="Open CloudOrc panel">
+            ToolTip="CloudOrc (point here or click to show the panel)" AutomationProperties.Name="Show CloudOrc panel">
       <Grid>
         <Rectangle Width="3" Height="36" RadiusX="1.5" RadiusY="1.5" Fill="{DynamicResource RailFg}" Opacity="0.7"/>
         <Ellipse x:Name="HandleBadge" Width="7" Height="7" Fill="{DynamicResource Bad}" VerticalAlignment="Top" Margin="0,6,0,0"
@@ -53,7 +53,7 @@
           <Border DockPanel.Dock="Top" Padding="14,12,8,10" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1">
             <DockPanel>
               <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
-                <Button x:Name="PinButton" Style="{StaticResource IconButton}" Click="OnPinClick" Content="&#xE718;"
+                <Button x:Name="PinButton" Visibility="Collapsed" Style="{StaticResource IconButton}" Click="OnPinClick" Content="&#xE718;"
                         ToolTip="Pin panel" AutomationProperties.Name="Pin panel"/>
                 <Button Style="{StaticResource IconButton}" Click="OnCollapseClick" Content="&#xE711;"
                         ToolTip="Hide (Esc)" AutomationProperties.Name="Hide panel"/>

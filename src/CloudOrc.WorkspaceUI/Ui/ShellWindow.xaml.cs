@@ -32,6 +32,7 @@ public partial class ShellWindow : Window
 
     private readonly WorkspaceController _c;
     private readonly DispatcherTimer _hideTimer = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private readonly DispatcherTimer _handleDwell = new() { Interval = TimeSpan.FromMilliseconds(300) };
     private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(4) };
     private readonly Dictionary<string, Button> _railButtons = [];
     private HotKeys? _hotKeys;
@@ -63,8 +64,15 @@ public partial class ShellWindow : Window
         DataContext = controller;
 
         SourceInitialized += OnSourceInitialized;
-        Handle.MouseEnter += (_, _) => { if (_mode == PanelMode.Handle) SetMode(PanelMode.Rail); };
-        Handle.MouseLeftButtonUp += (_, _) => DockRail(true);
+        // Hidden to the edge: pointing at the edge handle (a short dwell, so brushing past does nothing) or
+        // one click brings the rail back, and it stays. Hiding again is one click on the rail arrow.
+        _handleDwell.Tick += (_, _) => { _handleDwell.Stop(); if (_mode == PanelMode.Handle && Handle.IsMouseOver) DockRail(true); };
+        Handle.MouseEnter += (_, _) => { if (_mode == PanelMode.Handle) _handleDwell.Start(); };
+        Handle.MouseLeave += (_, _) => _handleDwell.Stop();
+        Handle.MouseLeftButtonDown += (_, e) => { _handleDwell.Stop(); DockRail(true); e.Handled = true; };
+        SizeChanged += (_, _) => QueueShape();
+        Rail.SizeChanged += (_, _) => QueueShape();
+        Handle.SizeChanged += (_, _) => QueueShape();
         MouseEnter += (_, _) => _leftAt = DateTime.MaxValue;
         MouseLeave += (_, _) => _leftAt = DateTime.UtcNow;
         PreviewKeyDown += OnPreviewKeyDown;
@@ -203,6 +211,7 @@ public partial class ShellWindow : Window
         }
 
         _leftAt = IsMouseOver ? DateTime.MaxValue : DateTime.UtcNow;
+        QueueShape();
     }
 
     private Rect _placedFor = Rect.Empty;
@@ -278,6 +287,8 @@ public partial class ShellWindow : Window
     private void CheckAutoHide()
     {
         if (_mode == RestMode || _mode == PanelMode.Handle) return;
+        // The open panel stays open until the user closes it (X, Esc, the rail arrow or the hotkey).
+        if (_mode == PanelMode.Expanded) return;
         var critical = _criticalUntil is { } until && DateTime.UtcNow < until;
         var idle = _leftAt == DateTime.MaxValue ? TimeSpan.Zero : DateTime.UtcNow - _leftAt;
         var delay = TimeSpan.FromSeconds(_mode == PanelMode.Rail ? Math.Min(2, AutoHideSeconds) : AutoHideSeconds);
@@ -406,11 +417,12 @@ public partial class ShellWindow : Window
     /// </summary>
     private void ShowAppsOnceForLauncher()
     {
-        if (_launcherShown || !_c.IsSeamless || !_c.HasPublishedApps || _hwnd == IntPtr.Zero) return;
+        // Open by default at sign-in (every user) and stay open until the user closes it. A launcher
+        // user (.connect / web / Floating Panel) waits until their apps are known, so the list is not empty.
+        if (_launcherShown || _hwnd == IntPtr.Zero || (_c.IsSeamless && !_c.HasPublishedApps)) return;
         _launcherShown = true;
         SelectTab("apps");
         SetMode(PanelMode.Expanded, activate: false);
-        _leftAt = DateTime.UtcNow.AddSeconds(12);
     }
 
     private void OnControllerChanged(object? sender, PropertyChangedEventArgs e)
@@ -516,21 +528,75 @@ public partial class ShellWindow : Window
     private void OnCollapseClick(object sender, RoutedEventArgs e) => SetMode(RestMode);
 
     /// <summary>Clip the open panel's content to its rounded corners (the header/list backgrounds are square).</summary>
-    private void OnPanelSizeChanged(object sender, SizeChangedEventArgs e) =>
+    private void OnPanelSizeChanged(object sender, SizeChangedEventArgs e)
+    {
         Panel.Clip = new RectangleGeometry(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), 18, 18);
+        QueueShape();
+    }
+
+    private bool _shapeQueued;
+
+    private void QueueShape()
+    {
+        if (_shapeQueued || _hwnd == IntPtr.Zero) return;
+        _shapeQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => { _shapeQueued = false; ApplyWindowShape(); });
+    }
+
+    /// <summary>
+    /// The window's own shape = the visible rounded cards (handle / rail / open panel). A RemoteApp (.connect)
+    /// or web session does not draw a transparent window's corners: without a window region they show black
+    /// (or only turn round much later). The region makes the corners round from the first frame everywhere.
+    /// </summary>
+    private void ApplyWindowShape()
+    {
+        try
+        {
+            var dpi = VisualTreeHelper.GetDpi(this);
+            IntPtr shape = IntPtr.Zero;
+            void Add(FrameworkElement el, double radius)
+            {
+                if (el.Visibility != Visibility.Visible || el.ActualWidth < 1 || el.ActualHeight < 1) return;
+                var r = el.TransformToAncestor(this).TransformBounds(new Rect(0, 0, el.ActualWidth, el.ActualHeight));
+                var part = CreateRoundRectRgn(
+                    (int)Math.Floor(r.Left * dpi.DpiScaleX), (int)Math.Floor(r.Top * dpi.DpiScaleY),
+                    (int)Math.Ceiling(r.Right * dpi.DpiScaleX) + 1, (int)Math.Ceiling(r.Bottom * dpi.DpiScaleY) + 1,
+                    (int)Math.Round(radius * 2 * dpi.DpiScaleX), (int)Math.Round(radius * 2 * dpi.DpiScaleY));
+                if (shape == IntPtr.Zero) { shape = part; return; }
+                CombineRgn(shape, shape, part, 2 /* RGN_OR */);
+                DeleteObject(part);
+            }
+
+            Add(Handle, 6);
+            Add(Rail, 18);
+            Add(Panel, 18);
+            if (shape == IntPtr.Zero) return;
+            // The system owns the region after SetWindowRgn (do not delete it).
+            if (SetWindowRgn(_hwnd, shape, true) == 0) DeleteObject(shape);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("window shape", ex);
+        }
+    }
+
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int w, int h);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern int CombineRgn(IntPtr dest, IntPtr src1, IntPtr src2, int mode);
+    [System.Runtime.InteropServices.DllImport("gdi32.dll")] private static extern bool DeleteObject(IntPtr obj);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern int SetWindowRgn(IntPtr hwnd, IntPtr rgn, bool redraw);
 
     /// <summary>
     /// Rail arrow: docked → "›" hides the rail to the edge; hidden (rail only shown while hovering) →
     /// "‹" keeps it visible at the edge again.
     /// </summary>
-    private void OnHideRailClick(object sender, RoutedEventArgs e) => DockRail(!_railDocked);
+    private void OnHideRailClick(object sender, RoutedEventArgs e) => DockRail(false);
 
+    /// <summary>The arrow always hides to the edge in one click (points to the edge); the edge handle brings it back.</summary>
     private void UpdateRailToggle()
     {
-        HideRailGlyph.Text = _railDocked ? "" : ""; // chevron right / chevron left
-        var label = _railDocked ? "Hide to edge" : "Keep visible";
-        HideRailButton.ToolTip = _railDocked ? "Hide to the edge (point at the edge to see it)" : "Keep the panel visible at the edge";
-        System.Windows.Automation.AutomationProperties.SetName(HideRailButton, label);
+        HideRailGlyph.Text = _leftSide ? "" : ""; // chevron towards the screen edge
+        HideRailButton.ToolTip = "Hide to the edge (click the edge to show it again)";
+        System.Windows.Automation.AutomationProperties.SetName(HideRailButton, "Hide to edge");
     }
 
     /// <summary>Show the rail permanently at the edge (true) or hide it to the edge handle (false).</summary>
@@ -805,6 +871,8 @@ public partial class ShellWindow : Window
 
     private void ApplySide()
     {
+        UpdateRailToggle();
+        QueueShape();
         // Rail sits against the screen edge; the panel opens towards the screen centre.
         ColA.Width = _leftSide ? GridLength.Auto : new GridLength(1, GridUnitType.Star);
         ColB.Width = _leftSide ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
@@ -813,10 +881,11 @@ public partial class ShellWindow : Window
         Grid.SetColumn(Panel, _leftSide ? 1 : 0);
         Handle.HorizontalAlignment = _leftSide ? HorizontalAlignment.Left : HorizontalAlignment.Right;
         Handle.CornerRadius = _leftSide ? new CornerRadius(0, 6, 6, 0) : new CornerRadius(6, 0, 0, 6);
-        Rail.CornerRadius = _leftSide ? new CornerRadius(0, 10, 10, 0) : new CornerRadius(10, 0, 0, 10);
-        Panel.CornerRadius = _leftSide ? new CornerRadius(0, 10, 10, 0) : new CornerRadius(10, 0, 0, 10);
-        Panel.BorderThickness = _leftSide ? new Thickness(0, 1, 1, 1) : new Thickness(1, 1, 0, 1);
-        Panel.Margin = _leftSide ? new Thickness(-1, 0, 0, 0) : new Thickness(0, 0, -1, 0);
+        // Two separate rounded cards (all corners), with a small gap between the panel and the rail.
+        Rail.CornerRadius = new CornerRadius(18);
+        Panel.CornerRadius = new CornerRadius(18);
+        Panel.BorderThickness = new Thickness(1);
+        Panel.Margin = _leftSide ? new Thickness(6, 0, 0, 0) : new Thickness(0, 0, 6, 0);
         Reposition();
     }
 
