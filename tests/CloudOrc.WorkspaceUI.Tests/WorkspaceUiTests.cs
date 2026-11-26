@@ -107,7 +107,16 @@ public class PanelLayoutTests
     public void Left_side_preference_anchors_to_the_left()
     {
         var r = PanelLayout.Compute(new Rect(100, 0, 1820, 1040), PanelMode.Rail, leftSide: true, railItemCount: 9);
-        Assert.Equal(100, r.Left);
+        Assert.Equal(100 + PanelLayout.EdgeGap, r.Left);
+    }
+
+    [Fact]
+    public void Rail_floats_off_the_right_edge_and_has_room_for_the_hide_arrow()
+    {
+        var r = PanelLayout.Compute(WorkArea, PanelMode.Rail, leftSide: false, railItemCount: 8);
+        Assert.Equal(1920 - PanelLayout.RailWidth - PanelLayout.EdgeGap, r.Left);
+        Assert.Equal(PanelLayout.RailHeight(8), r.Height);
+        Assert.True(PanelLayout.RailHeight(8) >= 64 + 9 * 54); // logo + 8 items + the arrow
     }
 }
 

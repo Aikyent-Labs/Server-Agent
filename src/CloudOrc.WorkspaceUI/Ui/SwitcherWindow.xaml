@@ -8,7 +8,7 @@
     <StackPanel>
       <DockPanel Margin="0,0,0,12">
         <TextBlock DockPanel.Dock="Right" Foreground="#94A3B8" FontSize="11.5" VerticalAlignment="Center"
-                   Text="Enter to switch · Esc to close · Alt+Tab still works"/>
+                   Text="Alt+Tab / Shift+Tab to move · release Alt or Enter to switch · Esc to close"/>
         <TextBlock Foreground="White" FontSize="15" FontWeight="SemiBold" Text="Switch to"/>
       </DockPanel>
       <TextBlock x:Name="EmptyText" Foreground="#CBD5E1" FontSize="13" Text="No application windows are open." Visibility="Collapsed"/>

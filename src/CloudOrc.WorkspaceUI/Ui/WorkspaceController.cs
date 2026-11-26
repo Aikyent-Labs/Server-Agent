@@ -20,6 +20,8 @@ public sealed class RunningAppVm : ObservableObject
     public string Badge => Windows.Count > 1 ? Windows.Count.ToString() : string.Empty;
     public IntPtr FirstHandle => Windows.Count > 0 ? Windows[0].Handle : IntPtr.Zero;
     public string StateSummary => Windows.Count > 1 ? $"{Windows.Count} windows" : Windows.FirstOrDefault()?.State ?? string.Empty;
+    /// <summary>Grey status dot when every window of the app is minimized, green otherwise.</summary>
+    public bool AllMinimized => Windows.Count > 0 && Windows.All(w => w.IsMinimized);
 
     private bool _expanded;
     public bool Expanded { get => _expanded; set => Set(ref _expanded, value); }
@@ -33,6 +35,7 @@ public sealed class WindowVm
     public required IntPtr Handle { get; init; }
     public required string Title { get; init; }
     public required string State { get; init; }
+    public bool IsMinimized => string.Equals(State, "Minimized", StringComparison.OrdinalIgnoreCase);
     public ImageSource? Icon { get; init; }
     public string AppName { get; init; } = string.Empty;
 
@@ -46,6 +49,8 @@ public sealed class PublishedAppVm
     public bool Running { get; init; }
     public string Name => App.Name;
     public string StateText => Running ? "Running" : "Open";
+    public string StatusText => Running ? "Running" : "Ready";
+    public bool IsFolder => App.IsFolder;
 
     public override string ToString() => $"{Name}, {StateText}";
 }
@@ -121,13 +126,16 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
             if (Set(ref _context, value))
             {
                 Raise(nameof(BrandName)); Raise(nameof(UserName)); Raise(nameof(IsAdmin)); Raise(nameof(SupportOrganization));
-                Raise(nameof(SupportContact)); Raise(nameof(LaunchModeText)); Raise(nameof(ServerName)); Raise(nameof(RailItems));
+                Raise(nameof(SupportContact)); Raise(nameof(LaunchModeText)); Raise(nameof(LoginName)); Raise(nameof(ServerName)); Raise(nameof(RailItems));
             }
         }
     }
 
     public string BrandName => Context?.Brand.Name ?? "CloudOrc";
     public string UserName => Context?.User.DisplayName ?? Environment.UserName;
+
+    /// <summary>The Windows login name of the signed-in user (what the user types to sign in).</summary>
+    public string LoginName => string.IsNullOrWhiteSpace(Context?.User.Username) ? Environment.UserName : Context!.User.Username!;
     public bool IsAdmin => Context?.User.IsCustomerAdmin == true;
     public string SupportOrganization => Context?.Brand.SupportOrganization ?? "CloudOrc Support";
     public string LaunchModeText => (Context?.LaunchMode ?? WorkspaceLaunchModes.MinimalPanel).Replace('_', ' ');
@@ -235,7 +243,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     public string AppsHeader => IsSeamless ? "YOUR APPS" : "RUNNING NOW";
     public string AppsTip => IsSeamless
         ? "Tip: these apps open as windows on your own PC — Alt+Tab shows them together with your PC's apps."
-        : "Tip: Alt+Tab works as usual. In a windowed RDP client use Alt+Page Up / Alt+Page Down.";
+        : "Tip: Alt+Tab opens the CloudOrc app switcher. In a windowed RDP client Alt+Tab stays on your own PC.";
     public bool CanHideForSession => !IsSeamless;
 
     private void UpdateSeamless() => IsSeamless = SessionActions.IsSeamlessSession() || TsplusPanelHider.Instance.HasPanelWindow();
@@ -261,6 +269,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         TsplusPanelHider.Instance.SetEnabled(hide);
     }
     public bool HasRunningApps => RunningApps.Count > 0;
+    public string RunningAppsLabel => RunningApps.Count == 1 ? "1 App" : $"{RunningApps.Count} Apps";
     public bool HasAlerts => Alerts.Count > 0;
 
     /// <summary>A new critical alert the panel should surface once (without stealing focus).</summary>
@@ -544,6 +553,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
             }
 
             Raise(nameof(HasRunningApps));
+            Raise(nameof(RunningAppsLabel));
             RebuildPublished();
         }
         catch (Exception ex)

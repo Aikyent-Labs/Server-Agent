@@ -24,7 +24,7 @@
     </Border>
 
     <!-- ============================ ICON RAIL ============================ -->
-    <Border x:Name="Rail" Grid.Column="1" Width="64" Background="{DynamicResource RailBg}" CornerRadius="10,0,0,10" Visibility="Collapsed">
+    <Border x:Name="Rail" Grid.Column="1" Width="64" Background="{DynamicResource RailBg}" CornerRadius="18" Visibility="Collapsed">
       <DockPanel LastChildFill="False" Margin="0,8">
         <Button x:Name="LogoButton" DockPanel.Dock="Top" Style="{StaticResource RailButton}" Click="OnLogoClick"
                 ToolTip="{Binding BrandName}" AutomationProperties.Name="CloudOrc home">
@@ -45,8 +45,8 @@
     </Border>
 
     <!-- ============================ EXPANDED PANEL ============================ -->
-    <Border x:Name="Panel" Grid.Column="0" Width="380" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Border}"
-            BorderThickness="1,1,0,1" CornerRadius="10,0,0,10" Visibility="Collapsed" Margin="0,0,-1,0">
+    <Border x:Name="Panel" Grid.Column="0" Width="374" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Border}"
+            BorderThickness="1" CornerRadius="18" Visibility="Collapsed" Margin="0,0,6,0" SizeChanged="OnPanelSizeChanged">
       <Grid>
         <DockPanel>
           <!-- Header -->
@@ -61,6 +61,12 @@
               <StackPanel Orientation="Horizontal">
                 <Image Source="{Binding Logo}" Height="26" MaxWidth="90" Margin="0,0,8,0" Stretch="Uniform"
                        Visibility="{Binding Logo, Converter={StaticResource NullToVis}}"/>
+                <!-- No partner logo: rounded CloudOrc tile -->
+                <Border Width="36" Height="36" CornerRadius="10" Background="{DynamicResource RailBg}" Margin="0,0,10,0" VerticalAlignment="Center"
+                        Visibility="{Binding Logo, Converter={StaticResource NullToVis}, ConverterParameter=invert}">
+                  <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE753;" FontSize="18" Foreground="#60A5FA"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
                 <StackPanel>
                   <TextBlock Text="{Binding BrandName}" Style="{StaticResource Title}"/>
                   <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
@@ -88,78 +94,156 @@
             <Grid>
               <!-- =================== APPS (RW-02) =================== -->
               <StackPanel x:Name="TabApps">
-                <DockPanel>
-                  <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Margin="0,10,0,0" Click="OnSwitcherClick"
-                          ToolTip="Ctrl+Alt+Shift+A" Content="Switcher"/>
-                  <TextBlock Style="{StaticResource Section}" Text="{Binding AppsHeader}"/>
-                </DockPanel>
-                <!-- Full desktop: only what is running (owner decision 25 Nov 2026). Seamless / RemoteApp
-                     (.connect, RemoteApp .rdp, HTML5 RemoteApp): no desktop or Start menu, so this panel is the
-                     launcher — published apps and folders with Open, replacing the TSPlus floating panel. -->
+                <StackPanel.Resources>
+                  <!-- App card: white, rounded; an opened group turns light blue (design 26 Nov 2026). -->
+                  <Style x:Key="AppCard" TargetType="Border">
+                    <Setter Property="Background" Value="White"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="CornerRadius" Value="12"/>
+                    <Setter Property="Padding" Value="12,10"/>
+                    <Setter Property="Margin" Value="0,0,0,8"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding Expanded}" Value="True">
+                        <Setter Property="Background" Value="{DynamicResource AccentSoft}"/>
+                        <Setter Property="BorderBrush" Value="#BFDBFE"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                  <Style x:Key="StatusDot" TargetType="Ellipse">
+                    <Setter Property="Width" Value="7"/>
+                    <Setter Property="Height" Value="7"/>
+                    <Setter Property="Margin" Value="0,0,6,0"/>
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                    <Setter Property="Fill" Value="{DynamicResource Ok}"/>
+                  </Style>
+                  <Style x:Key="CountPill" TargetType="Border">
+                    <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Setter Property="CornerRadius" Value="10"/>
+                    <Setter Property="Padding" Value="10,3"/>
+                    <Setter Property="Background" Value="White"/>
+                    <Setter Property="VerticalAlignment" Value="Center"/>
+                  </Style>
+                </StackPanel.Resources>
+
+                <!-- ========== YOUR APPS: launcher users only (.connect / web / Floating Panel) ========== -->
                 <StackPanel Visibility="{Binding ShowLauncher, Converter={StaticResource BoolToVis}}">
-                  <TextBlock Style="{StaticResource Small}" Text="No applications are assigned to you yet. Use Support if you need one."
+                  <DockPanel Margin="0,12,0,8">
+                    <Border DockPanel.Dock="Right" Style="{StaticResource CountPill}">
+                      <TextBlock FontSize="12" Text="{Binding PublishedApps.Count, StringFormat={}{0} total}"/>
+                    </Border>
+                    <TextBlock Text="Your Apps" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                  </DockPanel>
+                  <TextBlock Style="{StaticResource Small}" Margin="0,0,0,8" Text="No applications are assigned to you yet. Use Support if you need one."
                              Visibility="{Binding HasPublishedApps, Converter={StaticResource InverseBoolToVis}}"/>
                   <ItemsControl ItemsSource="{Binding PublishedApps}">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate>
-                        <Border Style="{StaticResource Card}" Width="108" Margin="0,0,6,6" Padding="8">
-                          <StackPanel>
-                            <Image Source="{Binding Icon}" Width="32" Height="32" Margin="0,2,0,4"/>
-                            <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold" TextAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                            <Button Margin="0,6,0,0" Padding="6,3" Style="{StaticResource SecondaryButton}" Click="OnLaunchClick" Tag="{Binding}"
-                                    AutomationProperties.Name="{Binding Name, StringFormat=Open {0}}">
-                              <TextBlock Text="{Binding StateText}" FontSize="11.5"/>
+                        <Border Style="{StaticResource AppCard}">
+                          <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Padding="14,4" VerticalAlignment="Center"
+                                    Click="OnLaunchClick" Tag="{Binding}" AutomationProperties.Name="{Binding Name, StringFormat=Open {0}}">
+                              <TextBlock Text="{Binding StateText}" FontSize="12.5"/>
                             </Button>
-                          </StackPanel>
+                            <Image Source="{Binding Icon}" Width="28" Height="28" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                            <StackPanel VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+                              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <Ellipse>
+                                  <Ellipse.Style>
+                                    <Style TargetType="Ellipse" BasedOn="{StaticResource StatusDot}">
+                                      <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Running}" Value="False">
+                                          <Setter Property="Fill" Value="{DynamicResource Muted}"/>
+                                        </DataTrigger>
+                                      </Style.Triggers>
+                                    </Style>
+                                  </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Style="{StaticResource Small}" Text="{Binding StatusText}"/>
+                              </StackPanel>
+                            </StackPanel>
+                          </DockPanel>
                         </Border>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
-                  <TextBlock Style="{StaticResource Section}" Text="RUNNING NOW"/>
                 </StackPanel>
-                <TextBlock Style="{StaticResource Small}" Text="No application windows are open."
+
+                <!-- ========== RUNNING NOW ========== -->
+                <DockPanel Margin="0,12,0,8">
+                  <Border DockPanel.Dock="Right" Style="{StaticResource CountPill}">
+                    <TextBlock FontSize="12" Text="{Binding RunningAppsLabel}"/>
+                  </Border>
+                  <TextBlock Text="Running Now" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </DockPanel>
+                <TextBlock Style="{StaticResource Small}" Margin="0,0,0,8" Text="No application windows are open."
                            Visibility="{Binding HasRunningApps, Converter={StaticResource InverseBoolToVis}}"/>
                 <ItemsControl ItemsSource="{Binding RunningApps}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource Card}" Padding="8">
+                      <Border Style="{StaticResource AppCard}">
                         <StackPanel>
                           <DockPanel>
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                              <Button Style="{StaticResource IconButton}" Content="&#xE8A7;" ToolTip="Focus / restore" Click="OnFocusGroupClick" Tag="{Binding}"
-                                      AutomationProperties.Name="Focus"/>
-                              <Button Style="{StaticResource IconButton}" Content="&#xE70D;" ToolTip="Show windows" Click="OnExpandGroupClick" Tag="{Binding}"
-                                      Visibility="{Binding HasMany, Converter={StaticResource BoolToVis}}" AutomationProperties.Name="Show windows"/>
-                            </StackPanel>
-                            <Image Source="{Binding Icon}" Width="22" Height="22" Margin="0,0,8,0"/>
+                            <!-- one window: open (focus) it; several: expand / collapse the list -->
+                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8A7;" ToolTip="Open (focus / restore)"
+                                    Click="OnFocusGroupClick" Tag="{Binding}" AutomationProperties.Name="Focus"
+                                    Visibility="{Binding HasMany, Converter={StaticResource InverseBoolToVis}}"/>
+                            <!-- chevron down / up; the IconButton template draws a glyph string, so swap the Content -->
+                            <Button DockPanel.Dock="Right" Click="OnExpandGroupClick" Tag="{Binding}"
+                                    ToolTip="Show windows" AutomationProperties.Name="Show windows"
+                                    Visibility="{Binding HasMany, Converter={StaticResource BoolToVis}}">
+                              <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
+                                  <Setter Property="Content" Value="&#xE70D;"/>
+                                  <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Expanded}" Value="True">
+                                      <Setter Property="Content" Value="&#xE70E;"/>
+                                    </DataTrigger>
+                                  </Style.Triggers>
+                                </Style>
+                              </Button.Style>
+                            </Button>
+                            <Image Source="{Binding Icon}" Width="28" Height="28" Margin="0,0,12,0" VerticalAlignment="Center"/>
                             <StackPanel VerticalAlignment="Center">
                               <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="13" TextWrapping="NoWrap"/>
-                                <Border Background="{DynamicResource Accent}" CornerRadius="8" Padding="6,0" Margin="6,0,0,0"
+                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextWrapping="NoWrap"/>
+                                <Border Background="{DynamicResource Accent}" CornerRadius="9" MinWidth="18" Height="18" Padding="5,0" Margin="8,0,0,0"
                                         Visibility="{Binding HasMany, Converter={StaticResource BoolToVis}}">
-                                  <TextBlock Text="{Binding Badge}" Foreground="White" FontSize="11"/>
+                                  <TextBlock Text="{Binding Badge}" Foreground="White" FontSize="11" FontWeight="SemiBold"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                               </StackPanel>
-                              <TextBlock Style="{StaticResource Small}" Text="{Binding StateSummary}"/>
+                              <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <Ellipse>
+                                  <Ellipse.Style>
+                                    <Style TargetType="Ellipse" BasedOn="{StaticResource StatusDot}">
+                                      <Style.Triggers>
+                                        <DataTrigger Binding="{Binding AllMinimized}" Value="True">
+                                          <Setter Property="Fill" Value="{DynamicResource Muted}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding HasMany}" Value="True">
+                                          <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                      </Style.Triggers>
+                                    </Style>
+                                  </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Style="{StaticResource Small}" Text="{Binding StateSummary}"/>
+                              </StackPanel>
                             </StackPanel>
                           </DockPanel>
-                          <ItemsControl ItemsSource="{Binding Windows}" Margin="30,6,0,0"
+                          <ItemsControl ItemsSource="{Binding Windows}" Margin="0,8,0,0"
                                         Visibility="{Binding Expanded, Converter={StaticResource BoolToVis}}">
                             <ItemsControl.ItemTemplate>
                               <DataTemplate>
-                                <DockPanel Margin="0,2">
-                                  <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button Style="{StaticResource IconButton}" Content="&#xE8A7;" ToolTip="Focus / restore" Click="OnFocusWindowClick" Tag="{Binding}" AutomationProperties.Name="Focus"/>
-                                    <Button Style="{StaticResource IconButton}" Content="&#xE921;" ToolTip="Minimize" Click="OnMinimizeWindowClick" Tag="{Binding}" AutomationProperties.Name="Minimize"/>
-                                    <Button Style="{StaticResource IconButton}" Content="&#xE8BB;" ToolTip="Close (the app may ask to save)" Click="OnCloseWindowClick" Tag="{Binding}" AutomationProperties.Name="Close"/>
-                                  </StackPanel>
-                                  <StackPanel>
-                                    <TextBlock Text="{Binding Title}" FontSize="12.5" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
-                                    <TextBlock Style="{StaticResource Small}" Text="{Binding State}"/>
-                                  </StackPanel>
+                                <DockPanel Margin="10,3,0,3">
+                                  <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8A7;" ToolTip="Open (focus / restore)"
+                                          Click="OnFocusWindowClick" Tag="{Binding}" AutomationProperties.Name="Focus"/>
+                                  <Image Source="{Binding Icon}" Width="18" Height="18" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                  <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                             TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip="{Binding State}"/>
                                 </DockPanel>
                               </DataTemplate>
                             </ItemsControl.ItemTemplate>
@@ -169,10 +253,34 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <Button Style="{StaticResource SecondaryButton}" HorizontalAlignment="Left" Margin="0,4,0,0" Click="OnShowDesktopClick"
-                        Content="Switch to desktop" ToolTip="Show the remote Windows desktop (this session)"
-                        Visibility="{Binding ShowLauncher, Converter={StaticResource InverseBoolToVis}}"/>
-                <TextBlock Style="{StaticResource Small}" Margin="0,10,0,0" Text="{Binding AppsTip}"/>
+
+                <!-- ========== actions ========== -->
+                <!-- UniformGrid skips collapsed buttons: launcher users (no desktop) get a full-width App Switcher -->
+                <UniformGrid Rows="1" Margin="-4,4,-4,0">
+                  <Button Margin="4,0" Style="{StaticResource SecondaryButton}" Padding="8,8" Click="OnShowDesktopClick"
+                          ToolTip="Show the remote Windows desktop (this session)" AutomationProperties.Name="Switch to Desktop"
+                          Visibility="{Binding ShowLauncher, Converter={StaticResource InverseBoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE7F4;" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                      <TextBlock Text="Switch to Desktop" FontSize="12.5" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                  <Button Margin="4,0" Style="{StaticResource SecondaryButton}" Padding="8,8" Click="OnSwitcherClick"
+                          ToolTip="Ctrl+Alt+Shift+A" AutomationProperties.Name="App Switcher">
+                    <StackPanel Orientation="Horizontal">
+                      <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE71D;" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{DynamicResource Accent}"/>
+                      <TextBlock Text="App Switcher" FontSize="12.5" VerticalAlignment="Center"/>
+                    </StackPanel>
+                  </Button>
+                </UniformGrid>
+
+                <!-- ========== tip ========== -->
+                <Border Background="{DynamicResource AccentSoft}" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="10" Padding="10,8" Margin="0,12,0,0">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" FontFamily="Segoe MDL2 Assets" Text="&#xE946;" FontSize="14" Foreground="{DynamicResource Accent}" Margin="0,1,8,0"/>
+                    <TextBlock Style="{StaticResource Small}" TextWrapping="Wrap" Text="{Binding AppsTip}"/>
+                  </DockPanel>
+                </Border>
               </StackPanel>
 
               <!-- =================== BACKUP (RW-07) =================== -->
@@ -356,25 +464,13 @@
 
               <!-- =================== MORE (RW-09) =================== -->
               <StackPanel x:Name="TabMore" Visibility="Collapsed">
-                <TextBlock Style="{StaticResource Section}" Text="SESSION"/>
+                <TextBlock Style="{StaticResource Section}" Text="YOUR ACCOUNT"/>
+                <!-- Only the signed-in user's own username (owner decision 26 Nov 2026). -->
                 <Border Style="{StaticResource Card}">
                   <Grid>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
-                    <TextBlock Style="{StaticResource Small}" Text="User"/>
-                    <TextBlock Grid.Column="1" FontSize="12.5" Text="{Binding UserName}"/>
-                    <TextBlock Grid.Row="1" Style="{StaticResource Small}" Text="Server"/>
-                    <TextBlock Grid.Row="1" Grid.Column="1" FontSize="12.5" Text="{Binding ServerName}"/>
-                    <TextBlock Grid.Row="2" Style="{StaticResource Small}" Text="Session"/>
-                    <TextBlock Grid.Row="2" Grid.Column="1" FontSize="12.5" Text="{Binding SessionId}"/>
-                    <TextBlock Grid.Row="3" Style="{StaticResource Small}" Text="Mode"/>
-                    <TextBlock Grid.Row="3" Grid.Column="1" FontSize="12.5" Text="{Binding LaunchModeText}"/>
-                    <TextBlock Grid.Row="4" Style="{StaticResource Small}" Text="CloudOrc agent"/>
-                    <TextBlock Grid.Row="4" Grid.Column="1" FontSize="12.5">
-                      <Run Text="{Binding ConnectionText, Mode=OneWay}"/><Run Text=" · v"/><Run Text="{Binding AgentVersion, Mode=OneWay}"/>
-                    </TextBlock>
-                    <TextBlock Grid.Row="5" Style="{StaticResource Small}" Text="Panel"/>
-                    <TextBlock Grid.Row="5" Grid.Column="1" FontSize="12.5" Text="{Binding PanelVersion, StringFormat=v{0}}"/>
+                    <TextBlock Style="{StaticResource Small}" Text="Username"/>
+                    <TextBlock Grid.Column="1" FontSize="12.5" FontWeight="SemiBold" Text="{Binding LoginName}"/>
                   </Grid>
                 </Border>
 
@@ -441,7 +537,7 @@
                   <StackPanel>
                     <TextBlock Style="{StaticResource Small}" Text="Ctrl+Alt+Shift+C — open / hide this panel"/>
                     <TextBlock Style="{StaticResource Small}" Text="Ctrl+Alt+Shift+A — app switcher"/>
-                    <TextBlock Style="{StaticResource Small}" Text="Alt+Tab — switch apps (Windows, unchanged)"/>
+                    <TextBlock Style="{StaticResource Small}" Text="Alt+Tab — CloudOrc app switcher (hold Alt, Tab to move, release to switch)"/>
                     <TextBlock Style="{StaticResource Small}" Text="Alt+Page Up / Down — switch apps in a windowed RDP client"/>
                     <TextBlock Style="{StaticResource Small}" Text="Ctrl+Alt+Home — RDP connection bar (switch to your own PC)"/>
                     <TextBlock Style="{StaticResource Small}" Text="Ctrl+Alt+Break — RDP full screen / window"/>
@@ -454,8 +550,8 @@
                           ToolTip="Leave your apps running and close the connection. Reconnect later to continue."/>
                   <Button Style="{StaticResource DangerButton}" Margin="0,0,8,8" Content="Sign out" Click="OnSignOutClick"
                           ToolTip="Closes all your apps on this server."/>
-                  <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,8" Content="Hide panel for this session" Click="OnHideForSessionClick"
-                          Visibility="{Binding CanHideForSession, Converter={StaticResource BoolToVis}}"/>
+                  <!-- "Hide panel for this session" removed (owner decision 26 Nov 2026): the panel cannot be closed
+                       for the session; the rail arrow hides it to the screen edge instead. -->
                 </WrapPanel>
               </StackPanel>
             </Grid>

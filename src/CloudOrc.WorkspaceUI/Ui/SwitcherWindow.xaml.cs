@@ -7,7 +7,7 @@ namespace CloudOrc.WorkspaceUI.Ui;
 
 /// <summary>
 /// Native-like visual switcher (RW-08): every open window of this session, multiple Tally
-/// instances shown separately. A companion to Windows Alt+Tab, never a replacement.
+/// instances shown separately. Opened from the Apps tab, Ctrl+Alt+Shift+A, or Alt+Tab (see AltTabHook).
 /// </summary>
 public partial class SwitcherWindow : Window
 {
@@ -37,6 +37,19 @@ public partial class SwitcherWindow : Window
         };
     }
 
+    /// <summary>Alt+Tab / Alt+Shift+Tab while the switcher is open: next / previous window (wraps).</summary>
+    public void Step(bool forward)
+    {
+        var n = List.Items.Count;
+        if (n == 0) return;
+        var i = List.SelectedIndex < 0 ? 0 : List.SelectedIndex;
+        List.SelectedIndex = ((i + (forward ? 1 : -1)) % n + n) % n;
+        List.ScrollIntoView(List.SelectedItem);
+    }
+
+    /// <summary>Alt released: switch to the selected window.</summary>
+    public void Commit() => SwitchToSelected();
+
     private void OnListKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter) SwitchToSelected();
@@ -47,7 +60,9 @@ public partial class SwitcherWindow : Window
     private void SwitchToSelected()
     {
         if (List.SelectedItem is not WindowVm w) return;
-        Close();
+        // Focus first, while this (foreground) window may still hand the foreground on; closing first
+        // would give the foreground back to whatever Windows picks and SetForegroundWindow is refused.
         _c.FocusWindow(w.Handle);
+        Close();
     }
 }

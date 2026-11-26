@@ -15,8 +15,13 @@ public sealed class InverseBoolToVisibilityConverter : IValueConverter
 
 public sealed class NullToVisibilityConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is null || value is string { Length: 0 } ? Visibility.Collapsed : Visibility.Visible;
+    /// <summary>Visible when there is a value; ConverterParameter "invert" = visible when there is none.</summary>
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        var has = !(value is null || value is string { Length: 0 });
+        if (parameter is string p && p == "invert") has = !has;
+        return has ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }

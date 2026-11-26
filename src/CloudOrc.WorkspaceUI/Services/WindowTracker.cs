@@ -62,7 +62,23 @@ public sealed class WindowTracker : IDisposable
     {
         if (!IsWindow(h)) return false;
         if (IsIconic(h)) ShowWindow(h, SW_RESTORE);
-        return SetForegroundWindow(h);
+        if (SetForegroundWindow(h) && GetForegroundWindow() == h) return true;
+
+        // Foreground lock: borrow the current foreground thread's input state for the switch.
+        var fg = GetForegroundWindow();
+        var fgThread = fg == IntPtr.Zero ? 0u : GetWindowThreadProcessId(fg, out _);
+        var me = GetCurrentThreadId();
+        var attached = fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true);
+        try
+        {
+            BringWindowToTop(h);
+            SetForegroundWindow(h);
+        }
+        finally
+        {
+            if (attached) AttachThreadInput(me, fgThread, false);
+        }
+        return IsWindow(h);
     }
 
     public static bool Minimize(IntPtr h) => IsWindow(h) && ShowWindow(h, SW_MINIMIZE);
@@ -180,6 +196,9 @@ public sealed class WindowTracker : IDisposable
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);

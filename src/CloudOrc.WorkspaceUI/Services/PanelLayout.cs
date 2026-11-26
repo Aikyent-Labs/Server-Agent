@@ -23,8 +23,10 @@ public static class PanelLayout
     public const double PanelWidth = 380;
     public const double Margin = 8;
     public const double MaxExpandedHeight = 760;
+    public const double EdgeGap = 6;
 
-    public static double RailHeight(int itemCount) => 64 + itemCount * 54 + 12;
+    /// <summary>Logo + rail items + the hide/keep arrow at the bottom (it was cut off before) + padding.</summary>
+    public static double RailHeight(int itemCount) => 64 + (itemCount + 1) * 54 + 12;
 
     public static Rect Compute(Rect workArea, PanelMode mode, bool leftSide, int railItemCount)
     {
@@ -47,7 +49,10 @@ public static class PanelLayout
 
         height = Math.Min(height, Math.Max(HandleHeight, workArea.Height - 2 * Margin));
         width = Math.Min(width, workArea.Width);
-        var left = leftSide ? workArea.Left : workArea.Right - width;
+        // The rail and the open panel float a few pixels off the screen edge so all their corners show
+        // rounded; the idle handle stays flush with the edge so it is easy to hit.
+        var gap = mode == PanelMode.Handle ? 0 : EdgeGap;
+        var left = leftSide ? workArea.Left + gap : workArea.Right - width - gap;
         var top = workArea.Top + Math.Max(Margin, (workArea.Height - height) / 2);
         if (top + height > workArea.Bottom - Margin) top = Math.Max(workArea.Top, workArea.Bottom - Margin - height);
         return new Rect(left, top, width, height);

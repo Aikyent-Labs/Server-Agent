@@ -116,8 +116,10 @@ public partial class ShellWindow : Window
             }
         };
         HwndSource.FromHwnd(_hwnd).AddHook(OnPanelCommand);
+        InstallAltTab();
         _hideTimer.Start();
         SetMode(RestMode);
+        ShowAppsOnceForLauncher();
     }
 
     /// <summary>"open:&lt;tab&gt;" | "close" | "switcher" from a same-session shortcut (see PanelCommand).</summary>
@@ -182,6 +184,8 @@ public partial class ShellWindow : Window
         Handle.Visibility = mode == PanelMode.Handle ? Visibility.Visible : Visibility.Collapsed;
         Rail.Visibility = mode == PanelMode.Handle ? Visibility.Collapsed : Visibility.Visible;
         Panel.Visibility = mode == PanelMode.Expanded ? Visibility.Visible : Visibility.Collapsed;
+        // Rounded look: the rail and the open panel are two rounded cards (all corners).
+        Rail.CornerRadius = new CornerRadius(18);
         if (mode != PanelMode.Expanded) ConfirmOverlay.Visibility = Visibility.Collapsed;
 
         if (_hwnd != IntPtr.Zero)
@@ -245,6 +249,12 @@ public partial class ShellWindow : Window
         {
             _lastOnTop = DateTime.UtcNow;
             WindowStyles.KeepOnTop(_hwnd);
+            // Our own pop-ups (switcher, consent, assistance banner) must stay above the panel.
+            foreach (Window w in Application.Current.Windows)
+            {
+                if (ReferenceEquals(w, this) || !w.IsVisible) continue;
+                WindowStyles.KeepOnTop(new WindowInteropHelper(w).Handle);
+            }
         }
     }
 
@@ -378,7 +388,8 @@ public partial class ShellWindow : Window
         {
             LoadPreferencesIntoUi();
             _ = LoadSecurityAsync();
-            _ = LoadUsersAsync();
+            // Users & Access is not shown in the panel (owner decision 26 Nov 2026): the panel shows only the
+            // signed-in user's own details; other users are managed in the CloudOrc portal.
         }
         if (tab == "support") _ = LoadTicketCategoriesAsync();
         UpdateRailSelection();
@@ -386,8 +397,25 @@ public partial class ShellWindow : Window
 
     // ------------------------------------------------------------------ controller -> view
 
+    private bool _launcherShown;
+
+    /// <summary>
+    /// Launcher users (.connect / web / Floating Panel) used to see their apps straight away in the TSPlus
+    /// panel: show the Apps list once after sign-in, without taking focus; it folds back to the rail on
+    /// its own when the user does not use it.
+    /// </summary>
+    private void ShowAppsOnceForLauncher()
+    {
+        if (_launcherShown || !_c.IsSeamless || !_c.HasPublishedApps || _hwnd == IntPtr.Zero) return;
+        _launcherShown = true;
+        SelectTab("apps");
+        SetMode(PanelMode.Expanded, activate: false);
+        _leftAt = DateTime.UtcNow.AddSeconds(12);
+    }
+
     private void OnControllerChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(WorkspaceController.HasPublishedApps) or nameof(WorkspaceController.ShowLauncher)) ShowAppsOnceForLauncher();
         switch (e.PropertyName)
         {
             case nameof(WorkspaceController.RailItems):
@@ -486,6 +514,10 @@ public partial class ShellWindow : Window
     private void OnLogoClick(object sender, RoutedEventArgs e) => Open("apps");
 
     private void OnCollapseClick(object sender, RoutedEventArgs e) => SetMode(RestMode);
+
+    /// <summary>Clip the open panel's content to its rounded corners (the header/list backgrounds are square).</summary>
+    private void OnPanelSizeChanged(object sender, SizeChangedEventArgs e) =>
+        Panel.Clip = new RectangleGeometry(new Rect(0, 0, e.NewSize.Width, e.NewSize.Height), 18, 18);
 
     /// <summary>
     /// Rail arrow: docked → "›" hides the rail to the edge; hidden (rail only shown while hovering) →
@@ -594,6 +626,29 @@ public partial class ShellWindow : Window
 
     private void OnSwitcherClick(object sender, RoutedEventArgs e) => OpenSwitcher();
 
+    private AltTabHook? _altTab;
+
+    /// <summary>Alt+Tab drives the CloudOrc switcher (hold Alt, Tab / Shift+Tab to move, release Alt to switch).</summary>
+    private void InstallAltTab()
+    {
+        _altTab = new AltTabHook();
+        if (!_altTab.Installed) return;
+        Log.Write("Alt+Tab opens the CloudOrc switcher in this session.");
+        _altTab.Step += forward =>
+        {
+            if (_switcher is not { IsVisible: true })
+            {
+                OpenSwitcher(); // pre-selects the window after the current one
+                if (!forward) { _switcher?.Step(false); _switcher?.Step(false); }
+                return;
+            }
+
+            _switcher.Step(forward);
+        };
+        _altTab.Commit += () => { Log.Write($"Alt+Tab commit (switcher open: {_switcher is { IsVisible: true }})"); if (_switcher is { IsVisible: true }) _switcher.Commit(); };
+        _altTab.Cancel += () => _switcher?.Close();
+    }
+
     private void OpenSwitcher()
     {
         _c.RefreshWindows();
@@ -606,6 +661,7 @@ public partial class ShellWindow : Window
         _switcher = new SwitcherWindow(_c);
         _switcher.Show();
         _switcher.Activate();
+        WindowStyles.KeepOnTop(new WindowInteropHelper(_switcher).Handle); // above the panel
     }
 
     // ------------------------------------------------------------------ backup
@@ -820,6 +876,7 @@ public partial class ShellWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _hideTimer.Stop();
+        _altTab?.Dispose();
         _hotKeys?.Dispose();
         _switcher?.Close();
         _consent?.Close();
