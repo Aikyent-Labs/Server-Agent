@@ -83,8 +83,10 @@ public sealed class WorkspaceUiSupervisor(
 
         _loggedMissingExe = false;
         var live = sessions.GetUserSessions();
-        var running = sessions.GetSessionsRunning(options.Value.ProcessName);
+        var processes = sessions.GetProcesses(options.Value.ProcessName);
+        var running = processes.Select(p => p.SessionId).ToHashSet();
         var desktops = sessions.GetSessionsRunning("explorer");
+        var hangCheckAllowed = HasFreeSpaceForHeartbeats();
         var report = new List<WorkspaceSessionHealth>();
 
         foreach (var s in live)
@@ -97,13 +99,20 @@ public sealed class WorkspaceUiSupervisor(
 
             // Disconnected sessions keep their panel process; never start one in a disconnected session.
             var uiRunning = running.Contains(s.SessionId);
+            var fallback = WorkspaceFallback.ForUser(s.Username);
             if (!s.Active && !uiRunning)
             {
-                report.Add(Health(s, tracker, WorkspaceComponentStatus.Stopped, null, null));
+                report.Add(fallback.PanelOff
+                    ? Health(s, tracker, WorkspaceComponentStatus.Fallback, fallback.ReasonCode, null)
+                    : Health(s, tracker, WorkspaceComponentStatus.Stopped, null, null));
                 continue;
             }
 
-            var obs = new SessionObservation(s.SessionId, s.Username, s.LogonTime, uiRunning, ReadStateFile(s.SessionId), desktops.Contains(s.SessionId));
+            var state = ReadStateFile(s.SessionId);
+            var mine = processes.Where(p => p.SessionId == s.SessionId).ToList();
+            var uiProcess = mine.FirstOrDefault(p => p.ProcessId == state?.ProcessId) ?? mine.OrderBy(p => p.StartedAt ?? DateTimeOffset.MaxValue).FirstOrDefault();
+            var obs = new SessionObservation(s.SessionId, s.Username, s.LogonTime, uiRunning, state, desktops.Contains(s.SessionId),
+                fallback, uiProcess, hangCheckAllowed);
             var decision = _policy.Decide(obs, tracker, now);
             switch (decision.Action)
             {
@@ -129,11 +138,29 @@ public sealed class WorkspaceUiSupervisor(
                     // A seamless (RemoteApp) user has no desktop: if our panel had hidden the TSPlus panel and
                     // was hard-killed, put the TSPlus panel back now (one-shot, no UI) so the user can still
                     // open apps while our panel is stopped.
-                    if (!sessions.TryStartInSession(s.SessionId, exe, "--recover-tsplus", out var recoverError))
+                    RestoreDefault(s.SessionId);
+
+                    break;
+
+                case WorkspaceUiAction.KillHung:
+                    var killed = uiProcess is not null && sessions.TryKill(uiProcess.ProcessId, out _);
+                    WorkspaceUiRecoveryPolicy.RecordHangKill(tracker, killed, now);
+                    logger.LogWarning("WorkspaceUI in session {Session} ({User}) stopped responding (no heartbeat for {Seconds} s): {Outcome}; restoring the TSPlus panel.",
+                        s.SessionId, s.Username, options.Value.HangSeconds, killed ? "ended" : "could not end it");
+                    RestoreDefault(s.SessionId);
+                    break;
+
+                case WorkspaceUiAction.StopForFallback:
+                    foreach (var p in mine)
                     {
-                        logger.LogWarning("Could not restore the TSPlus panel in session {Session}: {Error}", s.SessionId, recoverError);
+                        sessions.TryKill(p.ProcessId, out _);
                     }
 
+                    tracker.FallbackSince = now; // the one-shot TSPlus restore below must not be ended as well
+                    tracker.LastRecoveryAction = "ended the panel for the fallback switch";
+                    logger.LogWarning("WorkspaceUI in session {Session} ({User}) did not exit for the fallback switch ({Source}); ended it and restored the TSPlus panel.",
+                        s.SessionId, s.Username, fallback.Source);
+                    RestoreDefault(s.SessionId);
                     break;
             }
 
@@ -145,7 +172,10 @@ public sealed class WorkspaceUiSupervisor(
                 lkg.TryPromote(exe);
             }
 
-            report.Add(Health(s, tracker, decision.Status, decision.ReasonCode, obs.StateFile?.Version));
+            // A hang is over in seconds (ended + restarted); keep reporting it for 10 minutes so CloudOrc sees it.
+            var reason = decision.ReasonCode
+                ?? (tracker.LastHangAt is { } hungAt && now - hungAt < TimeSpan.FromMinutes(10) ? WorkspaceReasonCodes.Hung : null);
+            report.Add(Health(s, tracker, decision.Status, reason, obs.StateFile?.Version));
         }
 
         foreach (var gone in _trackers.Keys.Where(id => live.All(s => s.SessionId != id)).ToList())
@@ -155,6 +185,32 @@ public sealed class WorkspaceUiSupervisor(
         }
 
         WriteReport(now, report);
+    }
+
+    /// <summary>One-shot, no UI: the TSPlus floating panel is made visible again in that session (Alt+Tab needs nothing: the hook died with the panel).</summary>
+    private void RestoreDefault(int sessionId)
+    {
+        if (!sessions.TryStartInSession(sessionId, options.Value.ResolveExecutablePath(), "--recover-tsplus", out var error))
+        {
+            logger.LogWarning("Could not restore the TSPlus panel in session {Session}: {Error}", sessionId, error);
+        }
+    }
+
+    private bool HasFreeSpaceForHeartbeats()
+    {
+        try
+        {
+            var root = Path.GetPathRoot(WorkspaceSessionState.Directory);
+            if (string.IsNullOrEmpty(root)) return true;
+            var free = new DriveInfo(root).AvailableFreeSpace;
+            if (free >= (long)Math.Max(0, options.Value.HangMinFreeDiskMb) * 1024 * 1024) return true;
+            logger.LogWarning("Low disk space on {Drive} ({FreeMb} MB): WorkspaceUI hang detection paused.", root, free / (1024 * 1024));
+            return false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return true;
+        }
     }
 
     private void TryRollback(string exe, WorkspaceUiRecoveryPolicy.Tracker tracker)

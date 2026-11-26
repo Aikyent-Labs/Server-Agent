@@ -627,26 +627,60 @@ public partial class ShellWindow : Window
     private void OnSwitcherClick(object sender, RoutedEventArgs e) => OpenSwitcher();
 
     private AltTabHook? _altTab;
+    private bool _altTabWanted = true;
+    private bool _altTabBroken;
 
     /// <summary>Alt+Tab drives the CloudOrc switcher (hold Alt, Tab / Shift+Tab to move, release Alt to switch).</summary>
     private void InstallAltTab()
     {
-        _altTab = new AltTabHook();
-        if (!_altTab.Installed) return;
+        if (_altTab is not null || !_altTabWanted || _altTabBroken) return;
+        var hook = new AltTabHook(Dispatcher);
+        if (!hook.Installed) { hook.Dispose(); return; }
+        _altTab = hook;
         Log.Write("Alt+Tab opens the CloudOrc switcher in this session.");
-        _altTab.Step += forward =>
+        hook.Step += forward => Guard("step", () =>
         {
             if (_switcher is not { IsVisible: true })
             {
                 OpenSwitcher(); // pre-selects the window after the current one
-                if (!forward) { _switcher?.Step(false); _switcher?.Step(false); }
+                if (_switcher is not { IsVisible: true }) throw new InvalidOperationException("switcher did not open");
+                if (!forward) { _switcher.Step(false); _switcher.Step(false); }
                 return;
             }
 
             _switcher.Step(forward);
-        };
-        _altTab.Commit += () => { Log.Write($"Alt+Tab commit (switcher open: {_switcher is { IsVisible: true }})"); if (_switcher is { IsVisible: true }) _switcher.Commit(); };
-        _altTab.Cancel += () => _switcher?.Close();
+        });
+        hook.Commit += () => Guard("commit", () => { if (_switcher is { IsVisible: true }) _switcher.Commit(); });
+        hook.Cancel += () => Guard("cancel", () => _switcher?.Close());
+        hook.Failed += () => DisableAltTab("the panel did not respond in time", broken: true);
+    }
+
+    /// <summary>Any error in our Alt+Tab handling gives Alt+Tab back to Windows for the rest of the session.</summary>
+    private void Guard(string what, Action a)
+    {
+        try { a(); }
+        catch (Exception ex)
+        {
+            Log.Error($"Alt+Tab {what}", ex);
+            DisableAltTab($"error in {what}", broken: true);
+        }
+    }
+
+    private void DisableAltTab(string why, bool broken = false)
+    {
+        _altTabBroken |= broken;
+        if (_altTab is null) return;
+        _altTab.Dispose();
+        _altTab = null;
+        Log.Write($"Alt+Tab is the Windows switcher again ({why}).");
+    }
+
+    /// <summary>Fallback switch: Alt+Tab off = Windows switcher; back on = CloudOrc switcher (unless it failed this session).</summary>
+    public void SetAltTabEnabled(bool enabled, string why)
+    {
+        _altTabWanted = enabled;
+        if (enabled) InstallAltTab();
+        else DisableAltTab(why);
     }
 
     private void OpenSwitcher()

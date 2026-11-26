@@ -258,8 +258,8 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     {
         var ctx = Context;
         if (ctx is null) return;
-        var hide = ctx.WorkspaceEnabled && (ctx.HideTsplusPanel || (IsSeamless && HasPublishedApps));
-        var decision = $"launcherMode={IsSeamless} apps={PublishedApps.Count} hideTsplus={hide}";
+        var hide = ctx.WorkspaceEnabled && (ctx.HideTsplusPanel || (IsSeamless && HasPublishedApps)) && !_fallbackKeepTsplus;
+        var decision = $"launcherMode={IsSeamless} apps={PublishedApps.Count} hideTsplus={hide}" + (_fallbackKeepTsplus ? " (fallback switch: TSPlus panel kept)" : string.Empty);
         if (decision != _lastHidingDecision)
         {
             _lastHidingDecision = decision;
@@ -712,6 +712,19 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     public void MarkUserExit() => _stateFile.Write(WorkspaceSessionState.StateUserExit);
 
     public void MarkDisabled() => _stateFile.Write(WorkspaceSessionState.StateDisabled);
+
+    public void MarkFallback() => _stateFile.Write(WorkspaceSessionState.StateFallback);
+
+    private bool _fallbackKeepTsplus;
+
+    /// <summary>Fallback switch "TSPlus panel never hidden": applied now and on every later policy change.</summary>
+    public void SetFallbackKeepTsplus(bool keep)
+    {
+        if (_fallbackKeepTsplus == keep) return;
+        _fallbackKeepTsplus = keep;
+        if (keep) TsplusPanelHider.Instance.SetEnabled(false);
+        UpdateTsplusHiding();
+    }
 
     public void Dispose()
     {

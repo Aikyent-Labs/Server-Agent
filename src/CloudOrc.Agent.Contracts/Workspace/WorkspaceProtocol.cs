@@ -42,7 +42,10 @@ public static class WorkspaceCommandTypes
     /// <summary>Panels reload their policy/apps/brand now (e.g. after an admin profile change).</summary>
     public const string PolicyRefresh = "workspace.policy.refresh";
 
-    public static bool IsWorkspace(string? commandType) => commandType is UiRestart or PolicyRefresh;
+    /// <summary>Fetch the CloudOrc fallback switches now (admin panel kill switch changed). Also polled every minute.</summary>
+    public const string FallbackSync = "workspace.fallback.sync";
+
+    public static bool IsWorkspace(string? commandType) => commandType is UiRestart or PolicyRefresh or FallbackSync;
 }
 
 /// <summary>Commands the agent hands to a panel on its next heartbeat.</summary>
@@ -80,6 +83,8 @@ public static class WorkspaceComponentStatus
     public const string Recovering = "RECOVERING";
     public const string Degraded = "DEGRADED";
     public const string Stopped = "STOPPED";
+    /// <summary>The panel is off on purpose (fallback switch): the user has the default Windows / TSPlus experience.</summary>
+    public const string Fallback = "FALLBACK";
     public const string Unknown = "UNKNOWN";
 }
 
@@ -91,6 +96,15 @@ public static class WorkspaceReasonCodes
     public const string BackendUnavailable = "BACKEND_UNAVAILABLE";
     public const string WorkspaceUiDegraded = "WORKSPACE_UI_DEGRADED";
     public const string CrashLoop = "WORKSPACE_UI_CRASH_LOOP";
+    /// <summary>The panel stopped responding (no heartbeat): the Watch ended it and restored the default.</summary>
+    public const string Hung = "WORKSPACE_UI_HUNG";
+    /// <summary>Panel off by a CloudOrc team switch (admin panel).</summary>
+    public const string FallbackTeam = "WORKSPACE_FALLBACK_TEAM";
+    /// <summary>Panel off by an administrator on the server (local switch).</summary>
+    public const string FallbackLocal = "WORKSPACE_FALLBACK_LOCAL";
+    /// <summary>The Watch service is stopped or not reporting (seen by the Control Agent).</summary>
+    public const string WatchdogDown = "WATCHDOG_NOT_RUNNING";
+    public const string WatchdogStale = "WATCHDOG_NOT_REPORTING";
 }
 
 public sealed class WorkspacePipeRequest
@@ -140,6 +154,8 @@ public sealed class WorkspaceSessionState
     public const string StateUserExit = "user-exit";
     /// <summary>The panel is restarting itself on request — the Watch should wait, not count a crash.</summary>
     public const string StateRestarting = "restarting";
+    /// <summary>The panel is off because of a fallback switch — do not restart while the switch is on.</summary>
+    public const string StateFallback = "fallback";
 
     [JsonPropertyName("sessionId")] public int SessionId { get; init; }
     [JsonPropertyName("processId")] public int ProcessId { get; init; }

@@ -20,6 +20,7 @@ public partial class App : Application
     private Mutex? _mutex;
     private WorkspaceController? _controller;
     private AssistanceManager? _assistance;
+    private FallbackGuard? _fallback;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -93,6 +94,17 @@ public partial class App : Application
         // first; the current policy re-applies within seconds if hiding is still wanted.
         try { TsplusPanelHider.Instance.RecoverOrphans(); } catch (Exception ex) { Log.Error("tsplus recover", ex); }
 
+        // Fallback switch (CloudOrc team or a server administrator): this user gets the default
+        // Windows / TSPlus experience - do not show at all. Local files, works with no agent or internet.
+        var fallback = WorkspaceFallback.ForUser(Environment.UserName);
+        if (fallback.PanelOff && !force)
+        {
+            Log.Write($"WorkspaceUI not shown: fallback switch ({fallback.Source}: {fallback.Reason ?? "no reason given"}).");
+            new SessionStateFile(SessionActions.CurrentSessionId, Environment.UserName).Write(WorkspaceSessionState.StateFallback);
+            Shutdown(0);
+            return;
+        }
+
         var sessionId = SessionActions.CurrentSessionId;
         Log.Write($"WorkspaceUI {AppInfo.Version} starting in session {sessionId} (startedByWatch={startedByWatch}, force={force}).");
 
@@ -111,6 +123,21 @@ public partial class App : Application
         };
         controller.RestartRequested += () => Dispatcher.BeginInvoke(() => RestartSelf(shell));
         shell.Show();
+
+        _fallback = new FallbackGuard(Environment.UserName, Dispatcher);
+        _fallback.AltTabChanged += (on, why) => shell.SetAltTabEnabled(on, why);
+        _fallback.KeepTsplusChanged += controller.SetFallbackKeepTsplus;
+        _fallback.PanelOff += d =>
+        {
+            if (force) return; // support / testing session started with --force
+            Log.Write($"Fallback switch turned the panel off ({d.Source}: {d.Reason ?? "no reason given"}); default Windows / TSPlus experience restored.");
+            controller.MarkFallback();
+            shell.SetAltTabEnabled(false, "fallback switch");
+            try { TsplusPanelHider.Instance.RestoreAll(); } catch (Exception ex) { Log.Error("tsplus restore (fallback)", ex); }
+            shell.CloseForApp();
+            Shutdown(0);
+        };
+        _fallback.Start();
         _assistance = new AssistanceManager(api, Dispatcher);
         shell.AttachAssistance(_assistance);
         _ = controller.StartAsync(startedByWatch, force);
@@ -140,6 +167,7 @@ public partial class App : Application
     {
         try
         {
+            _fallback?.Dispose();
             _assistance?.Dispose();
             _controller?.Dispose();
             _mutex?.ReleaseMutex();

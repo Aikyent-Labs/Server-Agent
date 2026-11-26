@@ -47,6 +47,19 @@ public sealed class WorkspaceUiOptions
     /// <summary>Keep a last-known-good copy of the panel and roll back to it on a crash loop after an update.</summary>
     public bool AutoRollback { get; set; } = true;
 
+    /// <summary>
+    /// Hang detection: a running panel whose heartbeat (state file, written every 15 s from its UI thread)
+    /// is older than this is ended, the default (TSPlus panel) restored, and it is restarted with backoff.
+    /// 0 = off.
+    /// </summary>
+    public int HangSeconds { get; set; } = 90;
+
+    /// <summary>Hang detection is skipped while the ProgramData drive has less free space than this (heartbeat writes may fail).</summary>
+    public int HangMinFreeDiskMb { get; set; } = 100;
+
+    /// <summary>A panel told to stop by a fallback switch gets this long to exit on its own before the Watch ends it.</summary>
+    public int FallbackGraceSeconds { get; set; } = 30;
+
     /// <summary>A panel version counts as "good" after running this long without a crash.</summary>
     public int LastKnownGoodAfterMinutes { get; set; } = 10;
 

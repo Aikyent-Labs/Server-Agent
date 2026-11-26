@@ -193,6 +193,18 @@ public class WorkspaceUiSupervisorTests : IDisposable
         public string? GetSessionUserSid(int sessionId) => null;
 
         public List<int> RecoverStarts { get; } = [];
+        public List<int> Killed { get; } = [];
+
+        public IReadOnlyList<SessionProcess> GetProcesses(string processName) =>
+            Running.Select(id => new SessionProcess(id, 1000 + id, null)).ToList();
+
+        public bool TryKill(int processId, out string? error)
+        {
+            Killed.Add(processId);
+            Running.Remove(processId - 1000);
+            error = null;
+            return true;
+        }
 
         public bool TryStartInSession(int sessionId, string exePath, string arguments, out string? error)
         {

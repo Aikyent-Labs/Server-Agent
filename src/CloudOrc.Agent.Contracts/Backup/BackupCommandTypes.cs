@@ -74,6 +74,9 @@ public static class AgentCapabilities
     /// <summary>Serves the Remote Workspace panel pipe + token broker (handoff v1.2 §47).</summary>
     public const string WorkspaceUiV1 = "workspace-ui.v1";
 
+    /// <summary>Remote Workspace fallback switches (workspace.fallback.sync + GET agent/fallback).</summary>
+    public const string WorkspaceFallbackV1 = "workspace-fallback.v1";
+
     /// <summary>Can install the separate CloudOrc Backup Agent (agent.backup-agent.install).</summary>
     public const string BackupAgentInstallV1 = "backup-agent-install.v1";
 

@@ -73,6 +73,13 @@ if (args.Length > 0 && string.Equals(args[0], "set-activation", StringComparison
     return ActivationSettingsFile.RunCommandLine(args, setOptions.DataDirectory);
 }
 
+// `workspace fallback ...`: local fallback switch for a server administrator (CloudOrc panel off /
+// Alt+Tab back to Windows / TSPlus panel kept). Works without enrollment or internet.
+if (args.Length > 0 && string.Equals(args[0], "workspace", StringComparison.OrdinalIgnoreCase))
+{
+    return CloudOrc.ControlAgent.Workspace.WorkspaceFallbackCli.Run(args.Skip(1).ToArray());
+}
+
 // `restart-service` is a one-shot helper the running service launches (detached) after a local
 // activation from the tray, so it comes back up in enrolled mode. It only ever restarts this
 // agent's own service - no arbitrary commands.
@@ -304,6 +311,15 @@ if (backendOptions.Enabled)
 
     builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspaceUiRestartHandler>();
     builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspacePolicyRefreshHandler>();
+    // Fallback switches (CloudOrc team kill switch -> fallback-team.json, desired-state sync) + Watch supervision.
+    builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.WorkspaceFallbackSync>();
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudOrc.ControlAgent.Workspace.WorkspaceFallbackSync>());
+    builder.Services.AddSingleton<ITypedCommandHandler, CloudOrc.ControlAgent.Workspace.WorkspaceFallbackSyncHandler>();
+    if (OperatingSystem.IsWindows())
+    {
+        builder.Services.AddSingleton<CloudOrc.ControlAgent.Workspace.WatchdogGuard>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudOrc.ControlAgent.Workspace.WatchdogGuard>());
+    }
 
     // ---- Durable outbox delivery (§11 at-least-once) + updater result reporting (§13).
     builder.Services.AddSingleton<OutboxDispatcherService>();

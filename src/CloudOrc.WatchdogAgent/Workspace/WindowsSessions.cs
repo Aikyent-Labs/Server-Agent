@@ -19,7 +19,15 @@ public interface ISessionHost
 
     /// <summary>Starts <paramref name="exePath"/> as the session's user on its interactive desktop. Needs SYSTEM (SeTcbPrivilege).</summary>
     bool TryStartInSession(int sessionId, string exePath, string arguments, out string? error);
+
+    /// <summary>Running processes with this name: session, process id, start time (UTC; null when unreadable).</summary>
+    IReadOnlyList<SessionProcess> GetProcesses(string processName);
+
+    /// <summary>Ends one process (hung panel / panel that ignores a fallback switch). Needs SYSTEM for other users' processes.</summary>
+    bool TryKill(int processId, out string? error);
 }
+
+public sealed record SessionProcess(int SessionId, int ProcessId, DateTimeOffset? StartedAt);
 
 /// <summary>WTS / CreateProcessAsUser implementation (supported service-to-user-session launch, handoff §47).</summary>
 [SupportedOSPlatform("windows")]
@@ -113,6 +121,52 @@ public sealed class WindowsSessionHost : ISessionHost
         finally
         {
             CloseHandle(token);
+        }
+    }
+
+    public IReadOnlyList<SessionProcess> GetProcesses(string processName)
+    {
+        var list = new List<SessionProcess>();
+        foreach (var p in System.Diagnostics.Process.GetProcessesByName(processName))
+        {
+            try
+            {
+                DateTimeOffset? started = null;
+                try { started = new DateTimeOffset(p.StartTime.ToUniversalTime(), TimeSpan.Zero); }
+                catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException) { }
+                list.Add(new SessionProcess(p.SessionId, p.Id, started));
+            }
+            catch (InvalidOperationException)
+            {
+                // exited meanwhile
+            }
+            finally
+            {
+                p.Dispose();
+            }
+        }
+
+        return list;
+    }
+
+    public bool TryKill(int processId, out string? error)
+    {
+        error = null;
+        try
+        {
+            using var p = System.Diagnostics.Process.GetProcessById(processId);
+            p.Kill();
+            p.WaitForExit(5000);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return true; // already gone
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            error = ex.Message;
+            return false;
         }
     }
 

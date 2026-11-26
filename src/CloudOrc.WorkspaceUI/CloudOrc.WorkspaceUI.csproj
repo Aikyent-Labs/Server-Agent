@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <Compile Include="..\CloudOrc.Agent.Contracts\Workspace\WorkspaceProtocol.cs" Link="Protocol\WorkspaceProtocol.cs" />
+    <Compile Include="..\CloudOrc.Agent.Contracts\Workspace\WorkspaceFallback.cs" Link="Protocol\WorkspaceFallback.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -16,7 +16,8 @@ public sealed class WorkspaceHealthReporter(
     BackendApiClient api,
     WorkspaceHeartbeats heartbeats,
     TimeProvider time,
-    ILogger<WorkspaceHealthReporter> logger) : BackgroundService
+    ILogger<WorkspaceHealthReporter> logger,
+    WatchdogGuard? watchdog = null) : BackgroundService
 {
     public const string Route = "api/v1/remote-workspace/agent/health";
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
@@ -69,6 +70,20 @@ public sealed class WorkspaceHealthReporter(
         }
 
         var components = BuildComponents(ReadSupervisorReport(), heartbeats.Snapshot(time.GetUtcNow(), HeartbeatMaxAge));
+        if (OperatingSystem.IsWindows() && watchdog is { Installed: true, CheckedAt: { } checkedAt })
+        {
+            // Mutual supervision: the Watch's own health as seen by this agent (stopped / not reporting).
+            components.Add(new HealthComponent
+            {
+                Component = WorkspaceComponents.Watchdog,
+                SessionId = "0",
+                Status = watchdog.Status,
+                ReasonCode = watchdog.ReasonCode,
+                LastRecoveryAction = watchdog.LastAction,
+                HeartbeatAt = checkedAt
+            });
+        }
+
         if (components.Count == 0)
         {
             return;
