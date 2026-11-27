@@ -19,7 +19,7 @@ recommended one for deploying to many servers.
 | Administrator privileges | Required (to create Windows Services) |
 | Network access to GitHub (to download the installer) | Required for the one-line install command; not required if you copy the EXE over manually |
 | **.NET SDK** | **NOT REQUIRED** |
-| **.NET Runtime** | **NOT REQUIRED** |
+| **.NET 10 Windows Desktop Runtime** | Installed **automatically, once** by the installer if missing (Microsoft download, ~57 MB, Microsoft signature checked). Offline server: pass `--dotnet-runtime <path>` (EXE) or `-DotnetRuntimeInstaller <path>` (install-agent.ps1) |
 | **Git** | **NOT REQUIRED** |
 | **Visual Studio** | **NOT REQUIRED** |
 | **VS Code** | **NOT REQUIRED** |
@@ -27,9 +27,11 @@ recommended one for deploying to many servers.
 | **Docker** | **NOT REQUIRED** |
 | **Source code** | **NOT REQUIRED** |
 
-`CloudOrcAgentSetup.exe` deploys the **self-contained** published output of both agents -
-the .NET 10 runtime and every dependency (including the PowerShell SDK) ship inside the
-installer itself.
+`CloudOrcAgentSetup.exe` deploys the **framework-dependent** published output of the agents:
+every dependency (including the PowerShell SDK) ships inside the installer, while the .NET 10
+runtime is shared machine-wide and installed once (`scripts\ensure-dotnet-runtime.ps1`, run
+before any file is copied - also during silent self-updates). This keeps the release package
+at ~20 MB instead of ~320 MB (each of the 6 apps used to carry its own runtime copy).
 
 ---
 
@@ -44,7 +46,7 @@ dotnet test CloudOrc.WindowsAgents.sln -c Release
 
 ## B. Local package creation
 
-Publishing both agents self-contained and producing the release ZIP (used as an input by
+Publishing the agents (framework-dependent) and producing the release ZIP (used as an input by
 the installer build, and independently useful on its own - see [DEPLOYMENT.md](DEPLOYMENT.md)):
 
 ```powershell

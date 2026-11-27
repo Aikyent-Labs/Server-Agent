@@ -1,8 +1,11 @@
 ; CloudOrc Agent Setup - Inno Setup script
 ;
 ; Builds CloudOrcAgentSetup.exe: a single Windows installer EXE that deploys the
-; ALREADY-PUBLISHED self-contained win-x64 Control Agent + Watchdog Agent (produced by
+; ALREADY-PUBLISHED framework-dependent win-x64 Control Agent + Watchdog Agent (produced by
 ; scripts\package-agent.ps1 into dist\CloudOrcAgents-win-x64\...) as two Windows Services.
+; The agents share one machine-wide .NET 10 runtime: before any file is copied, the installer
+; runs scripts\ensure-dotnet-runtime.ps1, which installs Microsoft's .NET 10 Windows Desktop
+; Runtime once if it is missing (also during silent self-updates).
 ;
 ; This script does not build, publish, or modify the agents themselves - it only
 ; packages their existing published output. Run scripts\package-agent.ps1 first.
@@ -25,6 +28,8 @@
 ;   --api-base https://...       CloudOrc control-plane address used for activation codes and
 ;                                 by the tray's "Activate" screen. Persisted (not a secret).
 ;   --portal-url https://...     Optional portal link shown by the tray.
+;   --dotnet-runtime <path>      Offline servers: a windowsdesktop-runtime-10.x-win-x64.exe already
+;                                 on this machine, used if the .NET 10 runtime is missing.
 ;   --force-downgrade            Allow installing an older version over a newer one - see
 ;                                 CheckDowngradeProtection below. Never required for a
 ;                                 same-or-newer version, i.e. a normal upgrade.
@@ -33,6 +38,8 @@
 ; 10 = Control Agent service did not reach Running. 11 = Watchdog Agent service did not
 ; reach Running. 20 = enrollment failed. 30 = downgrade blocked (installed version is
 ; newer than this installer's version, and --force-downgrade was not passed).
+; 7 = (Inno "cannot proceed") the .NET 10 runtime was missing and could not be installed;
+; nothing was changed on the machine.
 
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0-dev"
@@ -54,6 +61,9 @@
 #endif
 #ifndef TraySourceDir
   #define TraySourceDir "..\dist\CloudOrcAgents-win-x64\Tray"
+#endif
+#ifndef EnsureRuntimeScript
+  #define EnsureRuntimeScript "..\scripts\ensure-dotnet-runtime.ps1"
 #endif
 #ifndef WorkspaceUiSourceDir
   #define WorkspaceUiSourceDir "..\dist\CloudOrcAgents-win-x64\WorkspaceUI"
@@ -125,6 +135,34 @@ Source: "{#EnginesSourceDir}\*"; DestDir: "{app}\Engines"; Flags: ignoreversion 
 Source: "{#UpdaterSourceDir}\*"; DestDir: "{app}\Updater"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: controlagent
 Source: "{#TraySourceDir}\*"; DestDir: "{app}\Tray"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: tray
 Source: "{#WorkspaceUiSourceDir}\*"; DestDir: "{app}\WorkspaceUI"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist; Components: workspace
+
+; Installs the shared .NET 10 runtime once (run from PrepareToInstall, never copied to {app}).
+Source: "{#EnsureRuntimeScript}"; Flags: dontcopy
+
+[InstallDelete]
+; Upgrading from a self-contained build (<= 1.6.10): Setup overwrites files but never removes old
+; ones, and a leftover hostfxr.dll next to an app makes the .NET launcher treat the now
+; framework-dependent app as self-contained -> "You must install or update .NET" (reproduced).
+; Removing the three host/runtime entry files makes every app use the shared runtime; the other
+; leftover runtime DLLs are ignored (not listed in the app's deps.json).
+Type: files; Name: "{app}\ControlAgent\hostfxr.dll"
+Type: files; Name: "{app}\ControlAgent\hostpolicy.dll"
+Type: files; Name: "{app}\ControlAgent\coreclr.dll"
+Type: files; Name: "{app}\WatchdogAgent\hostfxr.dll"
+Type: files; Name: "{app}\WatchdogAgent\hostpolicy.dll"
+Type: files; Name: "{app}\WatchdogAgent\coreclr.dll"
+Type: files; Name: "{app}\BackupWorker\hostfxr.dll"
+Type: files; Name: "{app}\BackupWorker\hostpolicy.dll"
+Type: files; Name: "{app}\BackupWorker\coreclr.dll"
+Type: files; Name: "{app}\Updater\hostfxr.dll"
+Type: files; Name: "{app}\Updater\hostpolicy.dll"
+Type: files; Name: "{app}\Updater\coreclr.dll"
+Type: files; Name: "{app}\Tray\hostfxr.dll"
+Type: files; Name: "{app}\Tray\hostpolicy.dll"
+Type: files; Name: "{app}\Tray\coreclr.dll"
+Type: files; Name: "{app}\WorkspaceUI\hostfxr.dll"
+Type: files; Name: "{app}\WorkspaceUI\hostpolicy.dll"
+Type: files; Name: "{app}\WorkspaceUI\coreclr.dll"
 
 [Registry]
 ; Start the status icon for every user who signs in (only when the tray component is chosen).
@@ -591,6 +629,31 @@ begin
       Result := True;
     end;
   end;
+end;
+
+// Runs before any file is copied or service stopped: the agents need the machine's .NET 10
+// runtime (they no longer carry their own copy). Missing -> ensure-dotnet-runtime.ps1 installs
+// Microsoft's Windows Desktop Runtime (signature checked). On failure Setup stops here (exit
+// code 7) and the installed agent keeps running untouched - this also protects silent
+// self-updates started by the signed updater.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Args, OfflineInstaller: String;
+begin
+  Result := '';
+  ExtractTemporaryFile('ensure-dotnet-runtime.ps1');
+  Args := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{tmp}\ensure-dotnet-runtime.ps1') + '"';
+  OfflineInstaller := GetNamedParam('dotnet-runtime');
+  if OfflineInstaller <> '' then
+    Args := Args + ' -InstallerPath "' + OfflineInstaller + '"';
+  Log('Ensuring the .NET 10 runtime: powershell.exe ' + Args);
+  if not Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'), Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Result := 'PowerShell could not be started to install the .NET 10 runtime. Nothing was changed.'
+  else if ResultCode <> 0 then
+    Result := 'The .NET 10 runtime (Microsoft Windows Desktop Runtime) could not be installed. Check the internet connection, or run Setup with --dotnet-runtime <path to windowsdesktop-runtime-10.x-win-x64.exe>. Nothing was changed.'
+  else
+    Log('.NET 10 runtime present.');
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

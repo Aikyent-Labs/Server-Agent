@@ -2,14 +2,15 @@
 <#
 .SYNOPSIS
     Installs (or upgrades) CloudOrc Control Agent + Watchdog Agent as Windows Services on
-    a Windows Server, from a self-contained release package downloaded over HTTPS.
+    a Windows Server, from a release package downloaded over HTTPS.
 
 .DESCRIPTION
     TARGET-SERVER SCRIPT. Requires ONLY Windows + PowerShell 5.1+ (built into every
-    supported Windows Server version) - no .NET SDK/runtime, no Git, no Visual Studio,
-    no VS Code, no Node.js, no Docker, and no source code are required on this machine.
-    The release package this script downloads is self-contained and carries its own
-    .NET runtime.
+    supported Windows Server version) - no .NET SDK, no Git, no Visual Studio, no VS Code,
+    no Node.js, no Docker, and no source code are required on this machine.
+    The agents share ONE machine-wide .NET 10 runtime (Windows Desktop Runtime). If it is not
+    installed yet, this script installs it once (ensure-dotnet-runtime.ps1 from the package:
+    Microsoft download, Microsoft signature checked) BEFORE anything installed is touched.
 
     Downloads a release ZIP + its .sha256 checksum over HTTPS, verifies the checksum
     BEFORE extracting anything, then installs/updates both agents as Windows Services:
@@ -59,6 +60,11 @@
     Base directory both agents are installed under. Defaults to
     "C:\Program Files\CloudOrc\Agents" per the standard layout.
 
+.PARAMETER DotnetRuntimeInstaller
+    Optional. Path to a .NET 10 Windows Desktop Runtime installer already on this server
+    (windowsdesktop-runtime-10.x-win-x64.exe), for servers that cannot reach Microsoft's download.
+    Only needed when the runtime is not installed yet.
+
 .PARAMETER SkipHealthCheck
     Skip the post-install health check (the install still succeeds/fails on its own
     steps regardless).
@@ -94,6 +100,8 @@ param(
     # (re-)enrolled after the files are deployed and before the services start, so an upgraded
     # agent receives its device key binding, command-signing key and mTLS certificate.
     [string]$EnrollToken = "",
+    # Offline servers: a .NET 10 Windows Desktop Runtime installer already on this machine.
+    [string]$DotnetRuntimeInstaller = "",
     [switch]$SkipHealthCheck
 )
 
@@ -277,6 +285,25 @@ if (-not (Test-Path (Join-Path $extractedWatchdogAgent "CloudOrc.WatchdogAgent.e
     Fail "Extracted package does not contain CloudOrc.WatchdogAgent.exe at the expected path."
 }
 Write-Host "  Extracted and verified package layout: OK"
+
+# ----------------------------------------------------------------------------
+# 5b. Shared .NET 10 runtime - installed once per server, BEFORE anything installed is touched
+#     (the agents no longer carry their own runtime copy). A failure here leaves the running
+#     agent exactly as it was.
+# ----------------------------------------------------------------------------
+Step "Ensuring the .NET 10 runtime"
+$ensureRuntime = Join-Path $extractDir "CloudOrcAgents-win-x64\ensure-dotnet-runtime.ps1"
+if (Test-Path $ensureRuntime) {
+    $runtimeArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $ensureRuntime)
+    if ($DotnetRuntimeInstaller) { $runtimeArgs += @("-InstallerPath", $DotnetRuntimeInstaller) }
+    & powershell.exe @runtimeArgs
+    if ($LASTEXITCODE -ne 0) {
+        Fail "The .NET 10 runtime could not be installed (see above). Nothing was changed - the current agent keeps running."
+    }
+} else {
+    # Older (self-contained) package: it carries its own runtime.
+    Write-Host "  Package carries its own runtime - nothing to install."
+}
 
 # ----------------------------------------------------------------------------
 # 6. Install directories

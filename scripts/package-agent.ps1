@@ -1,17 +1,20 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Builds, tests, and packages CloudOrc Control Agent + Watchdog Agent into a
-    self-contained win-x64 release ZIP with a SHA256 checksum.
+    Builds, tests, and packages the CloudOrc agents into a framework-dependent win-x64
+    release ZIP with a SHA256 checksum.
 
 .DESCRIPTION
     BUILD-MACHINE SCRIPT ONLY. Requires the .NET SDK on the machine running this script.
-    The output it produces is self-contained and requires NO .NET SDK/runtime on the
-    target Windows Server that later installs it (see scripts/install-agent.ps1).
+    The agents are published framework-dependent: they share ONE machine-wide .NET 10 runtime
+    (Windows Desktop Runtime) instead of each carrying its own copy, which made the package
+    ~320 MB. The installers put that runtime on the server once - scripts\ensure-dotnet-runtime.ps1,
+    shipped in the package root and used by install-agent.ps1 and the Inno Setup installer.
 
     Produces:
         dist\CloudOrcAgents-win-x64\ControlAgent\    (complete published app)
         dist\CloudOrcAgents-win-x64\WatchdogAgent\   (complete published app)
+        dist\CloudOrcAgents-win-x64\ensure-dotnet-runtime.ps1  (installs the shared runtime once)
         dist\CloudOrcAgents-win-x64.zip              (release asset)
         dist\CloudOrcAgents-win-x64.sha256           (release asset)
 
@@ -160,7 +163,7 @@ if (-not $SkipTests) {
 }
 
 # ----------------------------------------------------------------------------
-# 3. Clean output root and publish both agents self-contained win-x64
+# 3. Clean output root and publish the agents framework-dependent win-x64
 # ----------------------------------------------------------------------------
 Step "Cleaning output directory"
 if (Test-Path $OutputRoot) {
@@ -182,17 +185,19 @@ New-Item -ItemType Directory -Force -Path $watchdogAgentOut | Out-Null
 # the version baked into both exes' FileVersion/ProductVersion - see the -Version parameter
 # doc comment above. Without it, Directory.Build.props' placeholder version applies as-is.
 $versionArgs = @()
+# Framework-dependent: the apps use the machine's .NET 10 runtime (installed once by
+# ensure-dotnet-runtime.ps1), so each app is a few MB instead of ~80-140 MB.
 if ($Version) {
     Write-Host "  Overriding <Version> for this build: $Version"
     $versionArgs = @("-p:Version=$Version")
 }
 
-Step "dotnet publish Control Agent (win-x64, self-contained)"
-& dotnet publish "$controlAgentProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$controlAgentOut"
+Step "dotnet publish Control Agent (win-x64, framework-dependent)"
+& dotnet publish "$controlAgentProject" -c $Configuration -r win-x64 --self-contained false -p:PublishSingleFile=false -p:SatelliteResourceLanguages=en @versionArgs -o "$controlAgentOut"
 if ($LASTEXITCODE -ne 0) { Fail "Publishing Control Agent failed (exit code $LASTEXITCODE)." }
 
-Step "dotnet publish Watchdog Agent (win-x64, self-contained)"
-& dotnet publish "$watchdogAgentProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$watchdogAgentOut"
+Step "dotnet publish Watchdog Agent (win-x64, framework-dependent)"
+& dotnet publish "$watchdogAgentProject" -c $Configuration -r win-x64 --self-contained false -p:PublishSingleFile=false -p:SatelliteResourceLanguages=en @versionArgs -o "$watchdogAgentOut"
 if ($LASTEXITCODE -ne 0) { Fail "Publishing Watchdog Agent failed (exit code $LASTEXITCODE)." }
 
 # CO-DEV-BKP-001: isolated backup worker, signed self-updater, optional tray status app.
@@ -201,21 +206,21 @@ $updaterProject = Join-Path $repoRoot "src\CloudOrc.Agent.Updater\CloudOrc.Agent
 $trayProject = Join-Path $repoRoot "src\CloudOrc.Agent.Tray\CloudOrc.Agent.Tray.csproj"
 $workspaceUiProject = Join-Path $repoRoot "src\CloudOrc.WorkspaceUI\CloudOrc.WorkspaceUI.csproj"
 
-Step "dotnet publish Backup Worker (win-x64, self-contained)"
-& dotnet publish "$backupWorkerProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$backupWorkerOut"
+Step "dotnet publish Backup Worker (win-x64, framework-dependent)"
+& dotnet publish "$backupWorkerProject" -c $Configuration -r win-x64 --self-contained false -p:PublishSingleFile=false -p:SatelliteResourceLanguages=en @versionArgs -o "$backupWorkerOut"
 if ($LASTEXITCODE -ne 0) { Fail "Publishing Backup Worker failed (exit code $LASTEXITCODE)." }
 
-Step "dotnet publish Updater (win-x64, self-contained)"
-& dotnet publish "$updaterProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$updaterOut"
+Step "dotnet publish Updater (win-x64, framework-dependent)"
+& dotnet publish "$updaterProject" -c $Configuration -r win-x64 --self-contained false -p:PublishSingleFile=false -p:SatelliteResourceLanguages=en @versionArgs -o "$updaterOut"
 if ($LASTEXITCODE -ne 0) { Fail "Publishing Updater failed (exit code $LASTEXITCODE)." }
 
-Step "dotnet publish Tray status app (win-x64, self-contained)"
-& dotnet publish "$trayProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$trayOut"
+Step "dotnet publish Tray status app (win-x64, framework-dependent)"
+& dotnet publish "$trayProject" -c $Configuration -r win-x64 --self-contained false -p:PublishSingleFile=false -p:SatelliteResourceLanguages=en @versionArgs -o "$trayOut"
 if ($LASTEXITCODE -ne 0) { Fail "Publishing Tray failed (exit code $LASTEXITCODE)." }
 
 # Remote Workspace floating panel (handoff v1.2): per-user WPF app, supervised by the Watchdog.
-Step "dotnet publish Remote Workspace panel (win-x64, self-contained)"
-& dotnet publish "$workspaceUiProject" -c $Configuration -r win-x64 --self-contained true -p:PublishSingleFile=false @versionArgs -o "$workspaceUiOut"
+Step "dotnet publish Remote Workspace panel (win-x64, framework-dependent)"
+& dotnet publish "$workspaceUiProject" -c $Configuration -r win-x64 --self-contained false -p:PublishSingleFile=false -p:SatelliteResourceLanguages=en @versionArgs -o "$workspaceUiOut"
 if ($LASTEXITCODE -ne 0) { Fail "Publishing WorkspaceUI failed (exit code $LASTEXITCODE)." }
 
 # Engine binaries are third-party (Kopia / Restic / rclone). They are fetched and SHA-256
@@ -254,13 +259,32 @@ foreach ($exe in @(
 }
 Write-Host "  Backup Worker / Updater / Tray / WorkspaceUI EXEs: OK"
 
+# Every app must name the shared framework it runs on (runtimeconfig.json) and must NOT carry its
+# own runtime copy (that is what made the package ~320 MB).
+$appDirs = @(
+    @{ Dir = $controlAgentOut; Name = "CloudOrc.ControlAgent"; Framework = "Microsoft.NETCore.App" },
+    @{ Dir = $watchdogAgentOut; Name = "CloudOrc.WatchdogAgent"; Framework = "Microsoft.NETCore.App" },
+    @{ Dir = $backupWorkerOut; Name = "CloudOrc.BackupWorker"; Framework = "Microsoft.NETCore.App" },
+    @{ Dir = $updaterOut; Name = "CloudOrc.Agent.Updater"; Framework = "Microsoft.NETCore.App" },
+    @{ Dir = $trayOut; Name = "CloudOrc.Agent.Tray"; Framework = "Microsoft.WindowsDesktop.App" },
+    @{ Dir = $workspaceUiOut; Name = "CloudOrc.WorkspaceUI"; Framework = "Microsoft.WindowsDesktop.App" })
+foreach ($app in $appDirs) {
+    $rc = Join-Path $app.Dir "$($app.Name).runtimeconfig.json"
+    if (-not (Test-Path $rc)) { Fail "'$rc' is missing - the app cannot find the shared .NET runtime." }
+    $rcText = Get-Content -Raw -Path $rc
+    if ($rcText -notmatch [regex]::Escape($app.Framework)) { Fail "'$rc' does not target $($app.Framework)." }
+    if ($rcText -notmatch '"version":\s*"10\.') { Fail "'$rc' does not target .NET 10 (ensure-dotnet-runtime.ps1 installs 10.x)." }
+    if (Test-Path (Join-Path $app.Dir "coreclr.dll")) { Fail "'$($app.Dir)' contains its own .NET runtime (coreclr.dll) - publish must be framework-dependent." }
+}
 foreach ($dir in @($controlAgentOut, $watchdogAgentOut)) {
-    if (-not (Test-Path (Join-Path $dir "hostfxr.dll"))) { Fail "'$dir' is missing hostfxr.dll - this is not a self-contained publish." }
-    if (-not (Test-Path (Join-Path $dir "coreclr.dll"))) { Fail "'$dir' is missing coreclr.dll - this is not a self-contained publish." }
     if (-not (Test-Path (Join-Path $dir "appsettings.json"))) { Fail "'$dir' is missing appsettings.json." }
 }
-Write-Host "  Self-contained runtime files present in both outputs: OK"
+Write-Host "  All apps framework-dependent on .NET 10 (no runtime copies): OK"
 Write-Host "  appsettings.json present in both outputs: OK"
+
+# The installers run this once per server to put the shared runtime in place.
+Copy-Item -Path (Join-Path $ScriptRoot "ensure-dotnet-runtime.ps1") -Destination (Join-Path $packageRoot "ensure-dotnet-runtime.ps1") -Force
+Write-Host "  ensure-dotnet-runtime.ps1 added to the package root: OK"
 
 # ----------------------------------------------------------------------------
 # 5. ZIP + SHA256
