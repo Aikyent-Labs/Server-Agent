@@ -12,6 +12,10 @@ public sealed class BackupMe
     [JsonPropertyName("canChangePlan")] public bool CanChangePlan { get; set; }
     [JsonPropertyName("devices")] public int Devices { get; set; }
     [JsonPropertyName("hasBackupPlan")] public bool HasBackupPlan { get; set; } = true;
+    [JsonPropertyName("isAdmin")] public bool IsAdmin { get; set; } = true;
+    [JsonPropertyName("subscriptionId")] public string? SubscriptionId { get; set; }
+    /// <summary>The signed-in subscription's own workspace folder on this server (D:\ORG\NAME-1234).</summary>
+    [JsonPropertyName("workspaceRoot")] public string? WorkspaceRoot { get; set; }
 }
 
 public sealed class BackupEnvironmentsResponse

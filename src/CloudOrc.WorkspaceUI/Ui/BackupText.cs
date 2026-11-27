@@ -48,6 +48,7 @@ public static class BackupText
         ["DISPATCH_FAILED"] = "The restore could not be sent to your server. Please request it again.",
         ["NO_SOURCES"] = "No folders are selected for backup yet.",
         ["AGENT_NOT_BACKUP_CAPABLE"] = "The backup agent on your server needs an update before it can back up.",
+        ["BACKUP_ADMIN_ONLY"] = "Backup for this workspace is managed by your account admin.",
         ["BACKUP_NOT_IN_PLAN"] = "Backup is not part of your plan. Add Backup to your plan in the CloudOrc portal.",
         ["AGENT_NOT_RESTORE_CAPABLE"] = "The backup agent on your server needs an update before it can restore files.",
     };
@@ -95,6 +96,17 @@ public static class BackupText
             "FAILED" => ("Failed", "bad"),
             _ => ("In progress", "run")
         };
+    }
+
+    /// <summary>True when <paramref name="path"/> is <paramref name="root"/> or inside it (Windows: any case, \ or /).</summary>
+    public static bool IsInside(string path, string root)
+    {
+        static string N(string p) => p.Replace('/', '\\').TrimEnd('\\');
+        var p = N(path ?? string.Empty);
+        var r = N(root ?? string.Empty);
+        if (p.Length == 0 || r.Length == 0) return false;
+        return string.Equals(p, r, StringComparison.OrdinalIgnoreCase)
+            || p.StartsWith(r + "\\", StringComparison.OrdinalIgnoreCase);
     }
 
     public static string Bytes(double? bytes)

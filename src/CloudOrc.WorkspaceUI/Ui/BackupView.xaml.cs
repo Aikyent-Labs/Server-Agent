@@ -151,6 +151,13 @@ public partial class BackupView : UserControl
         {
             // Like the portal: no Backup in the customer's plan = nothing to back up or restore here.
             var me = await _api.BackupMeAsync(ct);
+            if (!me.IsAdmin)
+            {
+                ShowNotSetUp("Backup for this workspace is managed by your account admin. Ask them if you need files back.",
+                    "Backup is managed by your admin");
+                return;
+            }
+
             if (!me.HasBackupPlan)
             {
                 ShowNotSetUp("Your plan does not include Backup, so your files on this server are not backed up. Add Backup to your plan in the CloudOrc portal (Plans) to protect them.",
@@ -178,11 +185,15 @@ public partial class BackupView : UserControl
             BackupQuota? quota = null;
             try { quota = await quotaTask; } catch (WorkspaceApiException ex) { Log.Write($"backup quota: {ex.Code}"); }
 
-            // This user's own backed-up folders (their workspace). Checked on the server, as this user.
+            // This subscription's own backed-up folders: inside its workspace folder (from the server, the same
+            // seat -> subscription rule as the drive mapping). Without one, the folders this user can open.
             var sources = (_policy?.Effective.Sources ?? []).Select(s => Norm(s.Path))
                 .Concat(_points.SelectMany(p => p.Roots).Select(Norm))
                 .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            _myRoots = await Task.Run(() => sources.Where(CanOpen).ToList());
+            var workspace = string.IsNullOrWhiteSpace(me.WorkspaceRoot) ? null : Norm(me.WorkspaceRoot);
+            _myRoots = workspace is not null
+                ? sources.Where(s => BackupText.IsInside(s, workspace)).ToList()
+                : await Task.Run(() => sources.Where(CanOpen).ToList());
             if (sources.Count > 0 && _myRoots.Count == 0)
             {
                 ShowNotSetUp("Your own folders on this server are not part of the backup yet. Turn on backup for them in the CloudOrc portal, or contact support.");

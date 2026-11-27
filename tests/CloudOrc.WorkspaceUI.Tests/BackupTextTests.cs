@@ -54,4 +54,16 @@ public class BackupTextTests
         Assert.Equal("Only when you start it", BackupText.Schedule(JsonDocument.Parse("""{"kind":"manual"}""").RootElement));
         Assert.Equal("Not scheduled", BackupText.Schedule(default));
     }
+
+    [Theory]
+    [InlineData(@"D:\2031003506\SAYJAAN-3506\CloudDrive", @"D:\2031003506\SAYJAAN-3506", true)]
+    [InlineData(@"d:/2031003506/sayjaan-3506/CloudDrive/", @"D:\2031003506\SAYJAAN-3506\", true)]
+    [InlineData(@"D:\2031003506\SAYJAAN-3506", @"D:\2031003506\SAYJAAN-3506", true)]
+    [InlineData(@"E:\2031003506\SAYJAAN2-3506\CloudDrive", @"D:\2031003506\SAYJAAN-3506", false)]
+    [InlineData(@"D:\2031003506\SAYJAAN-35061\CloudDrive", @"D:\2031003506\SAYJAAN-3506", false)]
+    [InlineData(@"F:\2031003506\SAYJAAN31-3506\CloudDrive", @"F:\2031003506\SAYJAAN3", false)]
+    public void Only_folders_inside_the_subscription_workspace_are_mine(string path, string root, bool inside)
+    {
+        Assert.Equal(inside, BackupText.IsInside(path, root));
+    }
 }
