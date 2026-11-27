@@ -105,6 +105,10 @@ public partial class App : Application
             return;
         }
 
+        // Hide the TSPlus panel before anything else (the user must never see it come up first), using what
+        // this user had last time. The live policy confirms it within a second or turns it back on.
+        if (!fallback.HideTsplusOff) TryHideTsplusEarly();
+
         var sessionId = SessionActions.CurrentSessionId;
         Log.Write($"WorkspaceUI {AppInfo.Version} starting in session {sessionId} (startedByWatch={startedByWatch}, force={force}).");
 
@@ -141,6 +145,29 @@ public partial class App : Application
         _assistance = new AssistanceManager(api, Dispatcher);
         shell.AttachAssistance(_assistance);
         _ = controller.StartAsync(startedByWatch, force);
+    }
+
+    /// <summary>
+    /// Launcher session (RemoteApp / Floating Panel) with apps from TSPlus: start hiding at once when the last
+    /// known policy hid it (or on the very first run, before anything is cached). Never leaves the user without
+    /// a launcher: if the live policy says otherwise, or the panel exits, the TSPlus panel comes back.
+    /// </summary>
+    private static void TryHideTsplusEarly()
+    {
+        try
+        {
+            if (!SessionActions.IsSeamlessSession()) return;
+            var ctx = LocalCache.Load()?.Context;
+            var hadHiding = ctx is null || (ctx.WorkspaceEnabled && (ctx.HideTsplusPanel || TsplusAppSource.ForCurrentUser().Count > 0));
+            if (ctx is null && TsplusAppSource.ForCurrentUser().Count == 0) return;
+            if (!hadHiding) return;
+            Log.Write("Launcher session: hiding the TSPlus panel from the start.");
+            TsplusPanelHider.Instance.SetEnabled(true);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("early tsplus hide", ex);
+        }
     }
 
     /// <summary>Clean self-restart (workspace.ui.restart): start the new instance, then exit; the apps are untouched.</summary>

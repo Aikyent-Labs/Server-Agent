@@ -1,6 +1,7 @@
 <Window x:Class="CloudOrc.WorkspaceUI.Ui.ShellWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:CloudOrc.WorkspaceUI.Ui"
         Title="CloudOrc Remote Workspace"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowInTaskbar="False" ShowActivated="False" ResizeMode="NoResize"
@@ -284,36 +285,9 @@
               </StackPanel>
 
               <!-- =================== BACKUP (RW-07) =================== -->
+              <!-- =================== BACKUP (same as the customer portal, this server only) =================== -->
               <StackPanel x:Name="TabBackup" Visibility="Collapsed">
-                <TextBlock Style="{StaticResource Section}" Text="BACKUP"/>
-                <Border Style="{StaticResource Card}" Background="{Binding BackupTone, Converter={StaticResource ToneToSoftBrush}}">
-                  <StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                      <TextBlock Style="{StaticResource Icon}" Text="&#xE83D;" FontSize="20" Foreground="{Binding BackupTone, Converter={StaticResource ToneToBrush}}" Margin="0,0,10,0"/>
-                      <TextBlock Style="{StaticResource Title}" Text="{Binding BackupHeadline}" Foreground="{Binding BackupTone, Converter={StaticResource ToneToBrush}}"/>
-                    </StackPanel>
-                    <TextBlock Style="{StaticResource Body}" Margin="0,6,0,0" Text="{Binding BackupDetail}"/>
-                  </StackPanel>
-                </Border>
-                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                  <Button Style="{StaticResource PrimaryButton}" Content="Run backup now" Click="OnRunBackupClick"
-                          IsEnabled="{Binding CanRunBackup}" Visibility="{Binding IsAdmin, Converter={StaticResource BoolToVis}}"/>
-                  <Button Style="{StaticResource SecondaryButton}" Content="Refresh" Margin="8,0,0,0" Click="OnRefreshBackupClick"/>
-                </StackPanel>
-                <TextBlock Style="{StaticResource Small}" Margin="0,8,0,0" Visibility="{Binding IsAdmin, Converter={StaticResource InverseBoolToVis}}"
-                           Text="Only your workspace administrator can start a backup or change backup settings."/>
-                <TextBlock Style="{StaticResource Section}" Text="RECENT BACKUPS"/>
-                <ItemsControl ItemsSource="{Binding BackupHistory}">
-                  <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                      <DockPanel Margin="0,3">
-                        <TextBlock DockPanel.Dock="Right" Style="{StaticResource Small}" Text="{Binding Verification}"/>
-                        <TextBlock FontSize="12.5" Text="{Binding At, StringFormat={}{0:dd MMM yyyy  HH:mm}}"/>
-                      </DockPanel>
-                    </DataTemplate>
-                  </ItemsControl.ItemTemplate>
-                </ItemsControl>
-                <TextBlock Style="{StaticResource Small}" Margin="0,10,0,0" Text="Restore and backup settings are in the CloudOrc portal."/>
+                <local:BackupView x:Name="BackupPane"/>
               </StackPanel>
 
               <!-- =================== FILES / CLIPBOARD / PRINT (§32) =================== -->
@@ -400,6 +374,26 @@
                     <TextBlock Style="{StaticResource Small}" Text="{Binding SupportContact}" Visibility="{Binding SupportContact, Converter={StaticResource NullToVis}}"/>
                   </StackPanel>
                 </Border>
+                <!-- CloudOrc not reachable: a clear notice instead of an empty ticket form. -->
+                <Border Style="{StaticResource Card}" Background="{DynamicResource WarnSoft}" Margin="0,10,0,0"
+                        Visibility="{Binding CanRaiseTicket, Converter={StaticResource InverseBoolToVis}}">
+                  <DockPanel>
+                    <TextBlock DockPanel.Dock="Left" FontFamily="Segoe MDL2 Assets" Text="&#xE7BA;" FontSize="18" Margin="0,2,12,0"
+                               Foreground="{DynamicResource Warn}" VerticalAlignment="Top"/>
+                    <StackPanel>
+                      <TextBlock Style="{StaticResource Body}" FontWeight="SemiBold" Text="Support is not reachable right now"/>
+                      <TextBlock Style="{StaticResource Small}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                 Text="We can't send a ticket while CloudOrc is offline. Your apps and files keep working as usual."/>
+                      <TextBlock Style="{StaticResource Small}" Margin="0,6,0,0" TextWrapping="Wrap"
+                                 Text="This page will be ready again by itself as soon as the connection is back - you don't need to do anything."/>
+                      <TextBlock Style="{StaticResource Small}" Margin="0,6,0,0" TextWrapping="Wrap" FontWeight="SemiBold"
+                                 Visibility="{Binding SupportContact, Converter={StaticResource NullToVis}}">
+                        <Run Text="Urgent? Contact"/> <Run Text="{Binding SupportContact, Mode=OneWay}"/>
+                      </TextBlock>
+                    </StackPanel>
+                  </DockPanel>
+                </Border>
+                <StackPanel Visibility="{Binding CanRaiseTicket, Converter={StaticResource BoolToVis}}">
                 <TextBlock Style="{StaticResource Section}" Text="RAISE A TICKET"/>
                 <TextBlock Style="{StaticResource Small}" Text="Topic"/>
                 <ComboBox x:Name="TicketCategory" Margin="0,2,0,8" SelectionChanged="OnTicketCategoryChanged" AutomationProperties.Name="Ticket topic"/>
@@ -423,6 +417,7 @@
                 </DockPanel>
                 <TextBlock Style="{StaticResource Small}" Margin="0,8,0,0"
                            Text="Your session details (server, app, panel status) are attached so you don't have to repeat them. No passwords are ever sent."/>
+                </StackPanel>
                 <Border x:Name="TicketDone" Style="{StaticResource Card}" Background="{DynamicResource OkSoft}" Margin="0,10,0,0" Visibility="Collapsed">
                   <TextBlock x:Name="TicketDoneText" Style="{StaticResource Body}" Foreground="{DynamicResource Ok}"/>
                 </Border>

@@ -22,7 +22,8 @@ public static class PanelLayout
     public const double RailWidth = 64;
     public const double PanelWidth = 380;
     public const double Margin = 8;
-    public const double MaxExpandedHeight = 760;
+    /// <summary>Open panel height (owner: a little taller than the rail, not the whole screen); longer content scrolls.</summary>
+    public const double MaxExpandedHeight = 620;
     public const double EdgeGap = 6;
 
     /// <summary>Logo + rail items + the hide/keep arrow at the bottom (it was cut off before) + padding.</summary>

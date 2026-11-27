@@ -85,6 +85,7 @@ public partial class ShellWindow : Window
 
         _c.PropertyChanged += OnControllerChanged;
         _c.Toast += ShowToast;
+        BackupPane.Attach(_c.Api, ShowToast);
         _c.CriticalAlert += alert =>
         {
             // Material notification: reveal the panel WITHOUT taking focus from the user's app.
@@ -188,6 +189,7 @@ public partial class ShellWindow : Window
 
     private void SetMode(PanelMode mode, bool activate = false)
     {
+        if (_mode == PanelMode.Expanded && mode != PanelMode.Expanded) Log.Write($"Panel closed -> {mode}.");
         _mode = mode;
         Handle.Visibility = mode == PanelMode.Handle ? Visibility.Visible : Visibility.Collapsed;
         Rail.Visibility = mode == PanelMode.Handle ? Visibility.Collapsed : Visibility.Visible;
@@ -275,7 +277,10 @@ public partial class ShellWindow : Window
         Top = rect.Top;
         Width = rect.Width;
         Height = rect.Height;
-        Rail.Height = _mode == PanelMode.Handle ? double.NaN : rect.Height;
+        // The rail keeps its own (icon) height when the panel opens - it must not stretch to the panel's
+        // height. Centred, so it stays exactly where it was in rail mode.
+        Rail.Height = _mode == PanelMode.Handle ? double.NaN : Math.Min(PanelLayout.RailHeight(_railButtons.Count), rect.Height);
+        Rail.VerticalAlignment = VerticalAlignment.Center;
     }
 
     private void Open(string tab)
@@ -392,7 +397,7 @@ public partial class ShellWindow : Window
             element.Visibility = name == tab ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        if (tab == "backup") _ = _c.LoadBackupAsync();
+        if (tab == "backup") BackupPane.Activate(); else BackupPane.Deactivate();
         if (tab == "alerts") _ = _c.LoadAlertsAsync();
         if (tab == "apps") _c.RefreshWindows();
         if (tab == "more")
@@ -438,6 +443,8 @@ public partial class ShellWindow : Window
                 break;
             case nameof(WorkspaceController.ConnectionState):
                 UpdateConnectionDot();
+                // Connection back while Support is open: load the topics so the form comes back by itself.
+                if (_c.ConnectionState == "connected" && TabSupport.Visibility == Visibility.Visible) _ = LoadTicketCategoriesAsync();
                 break;
             case nameof(WorkspaceController.Context):
                 var p = _c.Context?.Preferences;

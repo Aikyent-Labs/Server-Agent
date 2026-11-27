@@ -166,6 +166,14 @@ public sealed class WorkspaceUiRecoveryPolicy(WorkspaceUiOptions options)
     /// <summary>Call after a start attempt; schedules the next allowed attempt (exponential, bounded).</summary>
     public void RecordStart(Tracker t, DateTimeOffset now, bool succeeded)
     {
+        if (!succeeded && !t.SeenRunning)
+        {
+            // Right after sign-in Windows may not hand out the user's token yet: not a crash, just try again soon.
+            t.NextAttemptAt = now.AddSeconds(Math.Max(1, options.RestartBackoffSeconds));
+            t.LastRecoveryAction = "start failed (will retry)";
+            return;
+        }
+
         t.Restarts.Enqueue(now);
         t.TotalRestarts++;
         var exp = Math.Min(10, t.Restarts.Count - 1);

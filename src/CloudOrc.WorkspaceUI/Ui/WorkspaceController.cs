@@ -159,7 +159,12 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
 
     /// <summary>connected | degraded | offline | connecting</summary>
     private string _connectionState = "connecting";
-    public string ConnectionState { get => _connectionState; private set => Set(ref _connectionState, value); }
+    public string ConnectionState { get => _connectionState; private set { if (Set(ref _connectionState, value)) Raise(nameof(CanRaiseTicket)); } }
+
+    private bool _categoriesFailed;
+
+    /// <summary>A ticket can be sent only while CloudOrc answers; otherwise Support shows a friendly notice, not an empty form.</summary>
+    public bool CanRaiseTicket => ConnectionState == "connected" && !_categoriesFailed;
 
     private string? _banner;
     public string? Banner { get => _banner; private set { if (Set(ref _banner, value)) Raise(nameof(HasBanner)); } }
@@ -257,7 +262,8 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     private void UpdateTsplusHiding()
     {
         var ctx = Context;
-        if (ctx is null) return;
+        // Decide only once the app list is known: deciding before it would show the TSPlus panel for a moment.
+        if (ctx is null || !_appsKnown) return;
         var hide = ctx.WorkspaceEnabled && (ctx.HideTsplusPanel || (IsSeamless && HasPublishedApps)) && !_fallbackKeepTsplus;
         var decision = $"launcherMode={IsSeamless} apps={PublishedApps.Count} hideTsplus={hide}" + (_fallbackKeepTsplus ? " (fallback switch: TSPlus panel kept)" : string.Empty);
         if (decision != _lastHidingDecision)
@@ -288,6 +294,9 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
 
     public async Task StartAsync(bool startedByWatch, bool force)
     {
+        // Launcher (RemoteApp / Floating Panel) session? Decide now: the TSPlus panel must be hidden right away.
+        UpdateSeamless();
+
         // 1) Cached apps first: instant and works offline.
         var cached = LocalCache.Load();
         if (cached?.Context is not null) Context = cached.Context;
@@ -402,6 +411,10 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         if (ConnectionState is "offline" or "degraded") _ = LoadAllAsync();
     }
 
+    /// <summary>CloudOrc (or the agent) cannot be reached - not a normal API error. The 15 s heartbeat retries and recovers.</summary>
+    private static bool IsUnreachable(WorkspaceApiException ex) =>
+        ex.Code is WorkspaceReasonCodes.BackendUnavailable or WorkspaceReasonCodes.AgentOffline or WorkspaceReasonCodes.AgentNotEnrolled;
+
     private void HandleOffline(WorkspaceApiException ex)
     {
         Log.Write($"Backend unavailable: {ex.Code} {ex.Message}");
@@ -467,7 +480,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
             BackupHistory.Clear();
             foreach (var p in b.History) BackupHistory.Add(p);
         }
-        catch (WorkspaceApiException ex) { Log.Write($"backup: {ex.Code}"); }
+        catch (WorkspaceApiException ex) { Log.Write($"backup: {ex.Code}"); if (IsUnreachable(ex)) HandleOffline(ex); }
     }
 
     public async Task LoadAlertsAsync()
@@ -485,7 +498,7 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
                 if (_seenCriticalAlerts.Add(a.Id)) CriticalAlert?.Invoke(a);
             }
         }
-        catch (WorkspaceApiException ex) { Log.Write($"alerts: {ex.Code}"); }
+        catch (WorkspaceApiException ex) { Log.Write($"alerts: {ex.Code}"); if (IsUnreachable(ex)) HandleOffline(ex); }
     }
 
     /// <summary>
@@ -493,8 +506,11 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
     /// read locally, works offline) plus any CloudOrc-published apps the backend adds; duplicates
     /// (same executable + arguments) appear once.
     /// </summary>
+    private bool _appsKnown;
+
     private void SetApps(List<PublishedApp>? apps)
     {
+        _appsKnown = true;
         var merged = new List<PublishedApp>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var a in TsplusAppSource.ForCurrentUser().Concat(apps ?? []))
@@ -644,6 +660,8 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         if (_categories is not null) return _categories;
         try { _categories = await _api.GetSupportCategoriesAsync(_cts.Token); }
         catch (WorkspaceApiException ex) { Log.Write($"support categories: {ex.Code}"); }
+        var failed = _categories is null || _categories.Categories.Count == 0;
+        if (failed != _categoriesFailed) { _categoriesFailed = failed; Raise(nameof(CanRaiseTicket)); }
         return _categories;
     }
 
@@ -667,7 +685,9 @@ public sealed class WorkspaceController : ObservableObject, IDisposable
         }
         catch (WorkspaceApiException ex)
         {
-            Toast?.Invoke(ex.Message);
+            // CloudOrc went away while sending: the Support page switches to the "not reachable" notice.
+            if (IsUnreachable(ex)) HandleOffline(ex);
+            else Toast?.Invoke(ex.Message);
             return null;
         }
         finally

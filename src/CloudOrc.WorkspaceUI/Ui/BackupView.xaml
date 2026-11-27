@@ -1,0 +1,438 @@
+<UserControl x:Class="CloudOrc.WorkspaceUI.Ui.BackupView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Backup in the panel, like the customer portal, compact:
+       Overview (status + Back up now) · Backups (every backup, restore from one) · Restore (choose backup, what, where).
+       Only this user's own workspace on this server is shown. Folders and time are changed in the portal. -->
+  <UserControl.Resources>
+    <Style x:Key="Dot" TargetType="Ellipse">
+      <Setter Property="Width" Value="8"/>
+      <Setter Property="Height" Value="8"/>
+      <Setter Property="Margin" Value="0,0,10,0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="LinkButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontSize" Value="12"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="Transparent" Padding="2,2">
+              <TextBlock Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontSize="{TemplateBinding FontSize}" FontWeight="SemiBold"/>
+            </Border>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Bar" TargetType="ProgressBar">
+      <Setter Property="Height" Value="6"/>
+      <Setter Property="Minimum" Value="0"/>
+      <Setter Property="Maximum" Value="100"/>
+      <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+      <Setter Property="Background" Value="{DynamicResource Border}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ProgressBar">
+            <Grid>
+              <Border Background="{TemplateBinding Background}" CornerRadius="3"/>
+              <Border x:Name="PART_Track"/>
+              <Border x:Name="PART_Indicator" HorizontalAlignment="Left" Background="{TemplateBinding Foreground}" CornerRadius="3"/>
+            </Grid>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SegTab" TargetType="RadioButton">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="Bg" CornerRadius="7" Padding="4,6" Background="Transparent">
+              <TextBlock x:Name="Label" Text="{TemplateBinding Content}" HorizontalAlignment="Center" FontWeight="SemiBold"
+                         Foreground="{TemplateBinding Foreground}" FontSize="{TemplateBinding FontSize}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="Bg" Property="Background" Value="White"/>
+                <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Accent}"/>
+              </Trigger>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Fg}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Box" TargetType="Border">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="10"/>
+      <Setter Property="Padding" Value="12,10"/>
+    </Style>
+    <Style x:Key="Label" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
+    </Style>
+    <Style x:Key="Value" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,2,0,0"/>
+      <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+    </Style>
+    <Style x:Key="Head" TargetType="TextBlock">
+      <Setter Property="FontSize" Value="13"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Margin" Value="0,14,0,6"/>
+    </Style>
+    <Style x:Key="Pill" TargetType="Border">
+      <Setter Property="CornerRadius" Value="9"/>
+      <Setter Property="Padding" Value="7,1"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="Radio" TargetType="RadioButton">
+      <Setter Property="Margin" Value="0,3"/>
+      <Setter Property="FontSize" Value="12.5"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+    </Style>
+    <Style x:Key="RowButton" TargetType="Button">
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bg" Background="Transparent">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bg" Property="Background" Value="#F1F5F9"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SmallPrimary" TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="FontSize" Value="12.5"/>
+    </Style>
+    <Style x:Key="SmallSecondary" TargetType="Button" BasedOn="{StaticResource SecondaryButton}">
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="FontSize" Value="12.5"/>
+    </Style>
+  </UserControl.Resources>
+
+  <StackPanel Margin="0,10,0,0">
+    <TextBlock x:Name="LoadingText" Style="{StaticResource Small}" Text="Loading your backup…"/>
+
+    <Border x:Name="NotSetUpCard" Style="{StaticResource Box}" Background="{DynamicResource WarnSoft}" BorderBrush="#FDE68A" Visibility="Collapsed">
+      <StackPanel>
+        <TextBlock x:Name="NotSetUpTitle" FontSize="13" FontWeight="SemiBold" Text="Backup is not set up for you yet"/>
+        <TextBlock x:Name="NotSetUpText" Style="{StaticResource Small}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+      </StackPanel>
+    </Border>
+
+    <StackPanel x:Name="Content" Visibility="Collapsed">
+      <!-- tabs -->
+      <Border Background="#EEF2F7" CornerRadius="9" Padding="3" Margin="0,0,0,12">
+        <UniformGrid Columns="3">
+          <RadioButton x:Name="TabOverview" Style="{StaticResource SegTab}" GroupName="bk" Content="Overview" IsChecked="True" Checked="OnTabChecked"/>
+          <RadioButton x:Name="TabHistory" Style="{StaticResource SegTab}" GroupName="bk" Content="Backups" Checked="OnTabChecked"/>
+          <RadioButton x:Name="TabRestore" Style="{StaticResource SegTab}" GroupName="bk" Content="Restore" Checked="OnTabChecked"/>
+        </UniformGrid>
+      </Border>
+
+      <!-- ============ OVERVIEW ============ -->
+      <StackPanel x:Name="OverviewPage">
+        <Border x:Name="StatusCard" CornerRadius="10" Padding="12,10" BorderThickness="1">
+          <DockPanel>
+            <Grid DockPanel.Dock="Left" Width="30" Height="30" Margin="0,0,10,0" VerticalAlignment="Top">
+              <Ellipse x:Name="StatusCircle"/>
+              <TextBlock x:Name="StatusIcon" FontFamily="Segoe MDL2 Assets" Text="&#xE83D;" FontSize="14" Foreground="White"
+                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+            <StackPanel>
+              <TextBlock x:Name="StatusHeadline" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap"/>
+              <TextBlock x:Name="StatusDetail" Style="{StaticResource Small}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+            </StackPanel>
+          </DockPanel>
+        </Border>
+
+        <Border x:Name="RunningCard" Style="{StaticResource Box}" Background="{DynamicResource AccentSoft}" BorderBrush="#BFDBFE" Margin="0,8,0,0" Visibility="Collapsed">
+          <StackPanel>
+            <DockPanel>
+              <Button x:Name="StopButton" DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Stop" Click="OnStopClick"
+                      AutomationProperties.Name="Stop the running backup" VerticalAlignment="Center"/>
+              <TextBlock x:Name="RunStage" FontSize="12.5" FontWeight="SemiBold"/>
+            </DockPanel>
+            <ProgressBar x:Name="RunProgress" Style="{StaticResource Bar}" Margin="0,6,0,4"/>
+            <TextBlock x:Name="RunDetail" Style="{StaticResource Small}"/>
+          </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Box}" Margin="0,8,0,0">
+          <StackPanel>
+            <UniformGrid Columns="2">
+              <StackPanel Margin="0,0,0,8">
+                <TextBlock Style="{StaticResource Label}" Text="Last backup"/>
+                <TextBlock x:Name="LastBackupValue" Style="{StaticResource Value}"/>
+              </StackPanel>
+              <StackPanel Margin="0,0,0,8">
+                <TextBlock Style="{StaticResource Label}" Text="Next backup"/>
+                <TextBlock x:Name="NextBackupValue" Style="{StaticResource Value}"/>
+              </StackPanel>
+              <StackPanel>
+                <TextBlock Style="{StaticResource Label}" Text="Backed up"/>
+                <TextBlock x:Name="StorageValue" Style="{StaticResource Value}"/>
+              </StackPanel>
+              <StackPanel>
+                <TextBlock Style="{StaticResource Label}" Text="Schedule"/>
+                <TextBlock x:Name="ScheduleValue" Style="{StaticResource Value}"/>
+              </StackPanel>
+            </UniformGrid>
+            <Border BorderBrush="{DynamicResource Border}" BorderThickness="0,1,0,0" Margin="0,10,0,0" Padding="0,8,0,0">
+              <StackPanel>
+                <TextBlock Style="{StaticResource Label}" Text="Folders"/>
+                <ItemsControl x:Name="FoldersList" Margin="0,2,0,0">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal" Margin="0,2">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8B7;" FontSize="13" Margin="0,1,6,0" Foreground="{DynamicResource Warn}"/>
+                        <TextBlock FontSize="12.5" FontWeight="SemiBold" Text="{Binding Name}"/>
+                        <TextBlock Style="{StaticResource Small}" Text="{Binding Shown}" Margin="6,0,0,0" ToolTip="{Binding Path}"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock x:Name="FoldersValue" Visibility="Collapsed"/>
+                <TextBlock x:Name="NoFoldersText" Style="{StaticResource Small}" Visibility="Collapsed" Text="None of your folders is in the backup yet."/>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </Border>
+
+        <Border x:Name="StorageRow" Style="{StaticResource Box}" Margin="0,8,0,0" Visibility="Collapsed">
+          <StackPanel>
+            <DockPanel>
+              <TextBlock x:Name="StoragePlan" DockPanel.Dock="Right" Style="{StaticResource Small}"/>
+              <TextBlock Style="{StaticResource Label}" Text="Backup storage of your plan"/>
+            </DockPanel>
+            <ProgressBar x:Name="StorageBar" Style="{StaticResource Bar}" Margin="0,6,0,4"/>
+            <TextBlock x:Name="StorageText" Style="{StaticResource Small}" TextWrapping="Wrap"/>
+          </StackPanel>
+        </Border>
+
+        <DockPanel Margin="0,10,0,0">
+          <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Refresh" Click="OnRefreshClick" VerticalAlignment="Center" AutomationProperties.Name="Refresh backup"/>
+          <Button x:Name="BackupNowButton" Style="{StaticResource SmallPrimary}" HorizontalAlignment="Left" Click="OnBackupNowClick" AutomationProperties.Name="Back up now">
+            <TextBlock x:Name="BackupNowText" Text="Back up now" Foreground="White"/>
+          </Button>
+        </DockPanel>
+        <TextBlock Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,10,0,0"
+                   Text="To change the folders or the backup time, use Backup in the CloudOrc portal."/>
+      </StackPanel>
+
+      <!-- ============ BACKUPS ============ -->
+      <StackPanel x:Name="HistoryPage" Visibility="Collapsed">
+        <!-- one backup, opened from the list: what it holds, and restore from it -->
+        <StackPanel x:Name="BackupDetail" Visibility="Collapsed">
+          <Button Style="{StaticResource LinkButton}" Content="‹ All backups" HorizontalAlignment="Left" Click="OnBackToListClick" Margin="0,0,0,8"/>
+          <Border Style="{StaticResource Box}">
+            <StackPanel>
+              <DockPanel>
+                <Border x:Name="DetailPill" DockPanel.Dock="Right" Style="{StaticResource Pill}">
+                  <TextBlock x:Name="DetailState" FontSize="11" FontWeight="SemiBold"/>
+                </Border>
+                <TextBlock x:Name="DetailWhen" FontSize="13.5" FontWeight="SemiBold"/>
+              </DockPanel>
+              <UniformGrid Columns="3" Margin="0,10,0,0">
+                <StackPanel>
+                  <TextBlock Style="{StaticResource Label}" Text="Size"/>
+                  <TextBlock x:Name="DetailSize" Style="{StaticResource Value}"/>
+                </StackPanel>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource Label}" Text="Files"/>
+                  <TextBlock x:Name="DetailFiles" Style="{StaticResource Value}"/>
+                </StackPanel>
+                <StackPanel>
+                  <TextBlock Style="{StaticResource Label}" Text="Took"/>
+                  <TextBlock x:Name="DetailTook" Style="{StaticResource Value}"/>
+                </StackPanel>
+              </UniformGrid>
+              <TextBlock x:Name="DetailReason" Style="{StaticResource Small}" Foreground="{DynamicResource Bad}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
+              <TextBlock x:Name="DetailEvents" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
+            </StackPanel>
+          </Border>
+          <TextBlock x:Name="DetailHeading" Style="{StaticResource Head}" Text="What's in this backup"/>
+          <ContentControl x:Name="DetailHost" Focusable="False"/>
+        </StackPanel>
+
+        <StackPanel x:Name="BackupList">
+        <TextBlock x:Name="NoJobsText" Style="{StaticResource Small}" Text="No backups yet." Visibility="Collapsed"/>
+        <Border Style="{StaticResource Box}" Padding="0">
+          <ItemsControl x:Name="JobsList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Style="{StaticResource RowButton}" Click="OnJobRowClick" Tag="{Binding}" AutomationProperties.Name="{Binding When, StringFormat=Open backup {0}}">
+                <Border BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Padding="12,8" Background="Transparent">
+                  <StackPanel>
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Style="{StaticResource Icon}" Text="&#xE76C;" FontSize="11" Margin="10,0,0,0"
+                                 Foreground="{DynamicResource Muted}" VerticalAlignment="Center"/>
+                      <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" Background="{Binding Tone, Converter={StaticResource ToneToSoftBrush}}">
+                        <TextBlock Text="{Binding StateText}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Tone, Converter={StaticResource ToneToBrush}}"/>
+                      </Border>
+                      <Ellipse Style="{StaticResource Dot}" Fill="{Binding Tone, Converter={StaticResource ToneToBrush}}"/>
+                      <StackPanel>
+                        <TextBlock FontSize="12.5" FontWeight="SemiBold" Text="{Binding When}"/>
+                        <TextBlock Style="{StaticResource Small}" Text="{Binding Sub}"/>
+                      </StackPanel>
+                    </DockPanel>
+                  </StackPanel>
+                </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+        <TextBlock Style="{StaticResource Small}" Margin="0,6,0,0" Text="Open a backup to see what is in it and to restore from it."/>
+        </StackPanel>
+        <ItemsControl x:Name="JobsPreview" Visibility="Collapsed"/>
+        <TextBlock x:Name="NoJobsPreview" Visibility="Collapsed"/>
+      </StackPanel>
+
+      <!-- ============ RESTORE ============ -->
+      <StackPanel x:Name="RestorePage" Visibility="Collapsed">
+        <ContentControl x:Name="RestoreHost" Focusable="False">
+        <Border x:Name="RestoreWizard" Style="{StaticResource Box}">
+          <StackPanel>
+            <StackPanel x:Name="PointStep">
+            <TextBlock FontSize="12.5" FontWeight="SemiBold" Text="1. Backup to restore from"/>
+            <ComboBox x:Name="PointsList" Margin="0,6,0,0" Padding="6,4" SelectionChanged="OnPointChanged" AutomationProperties.Name="Backup to restore from">
+              <ComboBox.ItemTemplate>
+                <DataTemplate>
+                  <TextBlock FontSize="12.5"><Run Text="{Binding When, Mode=OneWay}" FontWeight="SemiBold"/><Run Text="  "/><Run Text="{Binding Detail, Mode=OneWay}" Foreground="{DynamicResource Muted}"/></TextBlock>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBlock x:Name="NoPointsText" Style="{StaticResource Small}" Text="There is no backup to restore from yet." Visibility="Collapsed" Margin="0,4,0,0"/>
+            </StackPanel>
+
+            <StackPanel x:Name="WhatStep" Visibility="Collapsed">
+              <TextBlock x:Name="WhatHeading" FontSize="12.5" FontWeight="SemiBold" Text="2. What to restore" Margin="0,12,0,2"/>
+              <RadioButton x:Name="PickEverything" Style="{StaticResource Radio}" GroupName="what" IsChecked="True" Checked="OnWhatChanged"
+                           AutomationProperties.Name="Everything in this backup">
+                <TextBlock><Run Text="Everything"/><Run x:Name="EverythingRun" Foreground="{DynamicResource Muted}"/></TextBlock>
+              </RadioButton>
+              <TextBlock x:Name="EverythingText" Visibility="Collapsed"/>
+              <RadioButton x:Name="PickFiles" Style="{StaticResource Radio}" GroupName="what" Checked="OnWhatChanged"
+                           AutomationProperties.Name="Choose files and folders" Content="Choose files and folders"/>
+
+              <StackPanel x:Name="FilesStep" Margin="0,6,0,0" Visibility="Collapsed">
+                <DockPanel Margin="0,0,0,6">
+                  <Button DockPanel.Dock="Right" Style="{StaticResource SmallSecondary}" Padding="10,3" Content="Search" Click="OnSearchClick" Margin="6,0,0,0"/>
+                  <TextBox x:Name="SearchBox" KeyDown="OnSearchKeyDown" Padding="4,3" AutomationProperties.Name="Search files in this backup"/>
+                </DockPanel>
+                <ItemsControl x:Name="Crumbs">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource LinkButton}" Content="{Binding Label}" Tag="{Binding}" Click="OnCrumbClick"/>
+                        <TextBlock Style="{StaticResource Small}" Text="›" VerticalAlignment="Center" Margin="3,0" Visibility="{Binding HasNext, Converter={StaticResource BoolToVis}}"/>
+                      </StackPanel>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <ListBox x:Name="FilesList" MaxHeight="230" Margin="0,4,0,0" BorderBrush="{DynamicResource Border}" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         MouseDoubleClick="OnFileDoubleClick" AutomationProperties.Name="Files in this backup">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <DockPanel Margin="0,2">
+                        <CheckBox DockPanel.Dock="Left" IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,6,0"
+                                  AutomationProperties.Name="{Binding Name}" Checked="OnPickChanged" Unchecked="OnPickChanged"/>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="Open ›" Tag="{Binding}" Click="OnOpenFolderClick"
+                                Visibility="{Binding IsFolder, Converter={StaticResource BoolToVis}}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        <TextBlock DockPanel.Dock="Left" Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="13" Margin="0,0,6,0"
+                                   Foreground="{Binding GlyphBrush}" VerticalAlignment="Center"/>
+                        <StackPanel>
+                          <TextBlock FontSize="12.5" Text="{Binding Name}" TextTrimming="CharacterEllipsis" ToolTip="{Binding Path}"/>
+                          <TextBlock Style="{StaticResource Small}" Text="{Binding Detail}"/>
+                        </StackPanel>
+                      </DockPanel>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock x:Name="FilesNote" Style="{StaticResource Small}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                <TextBlock x:Name="PickedText" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Margin="0,2,0,0"/>
+              </StackPanel>
+            </StackPanel>
+
+            <StackPanel x:Name="WhereStep" Visibility="Collapsed">
+              <TextBlock x:Name="WhereHeading" FontSize="12.5" FontWeight="SemiBold" Text="3. Where to put them" Margin="0,12,0,2"/>
+              <RadioButton x:Name="ToNewFolder" Style="{StaticResource Radio}" GroupName="where" IsChecked="True" Checked="OnWhereChanged"
+                           AutomationProperties.Name="Into a new folder">
+                <TextBlock TextWrapping="Wrap"><Run Text="New folder (safe): "/><Run x:Name="NewFolderRun" Foreground="{DynamicResource Muted}"/></TextBlock>
+              </RadioButton>
+              <TextBlock x:Name="NewFolderText" Visibility="Collapsed"/>
+              <RadioButton x:Name="ToOriginal" Style="{StaticResource Radio}" GroupName="where" Checked="OnWhereChanged"
+                           AutomationProperties.Name="Back where they were" Content="Back where they were"/>
+              <StackPanel x:Name="ExistingRow" Margin="20,4,0,0" Visibility="Collapsed">
+                <TextBlock Style="{StaticResource Small}" Text="If a file is already there"/>
+                <ComboBox x:Name="ModeCombo" Margin="0,3,0,0" SelectedIndex="0" SelectionChanged="OnModeChanged" AutomationProperties.Name="If a file is already there">
+                  <ComboBoxItem Content="Keep both (new name)" Tag="rename"/>
+                  <ComboBoxItem Content="Skip it" Tag="skip-existing"/>
+                  <ComboBoxItem Content="Replace it" Tag="overwrite"/>
+                </ComboBox>
+                <TextBlock x:Name="OverwriteWarning" Style="{StaticResource Small}" Foreground="{DynamicResource Bad}" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Visibility="Collapsed" Text="Files on the server will be replaced by the backup copy. This cannot be undone."/>
+              </StackPanel>
+              <Button x:Name="RestoreGoButton" Style="{StaticResource SmallPrimary}" HorizontalAlignment="Left" Margin="0,12,0,0" Content="Restore" Click="OnRestoreClick"/>
+              <Border x:Name="ConfirmCard" CornerRadius="8" Background="{DynamicResource WarnSoft}" BorderBrush="#FDE68A" BorderThickness="1"
+                      Padding="10" Margin="0,10,0,0" Visibility="Collapsed">
+                <StackPanel>
+                  <TextBlock x:Name="ConfirmText" FontSize="12.5" TextWrapping="Wrap"/>
+                  <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <Button Style="{StaticResource SmallPrimary}" Content="Yes, restore" Click="OnConfirmRestoreClick"/>
+                    <Button Style="{StaticResource SmallSecondary}" Content="Cancel" Margin="8,0,0,0" Click="OnCancelConfirmClick"/>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+            <TextBlock x:Name="RestoreError" Style="{StaticResource Small}" Foreground="{DynamicResource Bad}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed"/>
+          </StackPanel>
+        </Border>
+        </ContentControl>
+
+        <TextBlock Style="{StaticResource Head}" Text="Recent restores"/>
+        <TextBlock x:Name="NoRestoresText" Style="{StaticResource Small}" Text="No restores yet." Visibility="Collapsed"/>
+        <Border Style="{StaticResource Box}" Padding="0">
+          <ItemsControl x:Name="RestoresList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Padding="12,8">
+                  <StackPanel>
+                    <DockPanel>
+                      <Border DockPanel.Dock="Right" Style="{StaticResource Pill}" Background="{Binding Tone, Converter={StaticResource ToneToSoftBrush}}">
+                        <TextBlock Text="{Binding Status}" FontSize="11" FontWeight="SemiBold" Foreground="{Binding Tone, Converter={StaticResource ToneToBrush}}"/>
+                      </Border>
+                      <TextBlock FontSize="12.5" FontWeight="SemiBold" Text="{Binding When}"/>
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource Small}" Margin="0,2,0,0" TextWrapping="Wrap" Text="{Binding Detail}"/>
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
+      </StackPanel>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

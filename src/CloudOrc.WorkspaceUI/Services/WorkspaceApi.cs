@@ -106,6 +106,29 @@ public sealed class WorkspaceApi : IDisposable
     public Task<AssistanceEnvelope> ReportAssistanceAsync(string id, string state, string? reason, CancellationToken ct) =>
         SendAsync<AssistanceEnvelope>(HttpMethod.Post, $"assistance/{Uri.EscapeDataString(id)}/state", new { state, reason }, ct);
 
+    // ---- Backup (same API as the customer portal, limited to this server: /remote-workspace/backup-v2)
+    private const string Bk = "backup-v2/";
+    private static string E(string v) => Uri.EscapeDataString(v);
+    public Task<BackupMe> BackupMeAsync(CancellationToken ct) => GetAsync<BackupMe>(Bk + "me", ct);
+    public Task<BackupEnvironmentsResponse> BackupEnvironmentsAsync(CancellationToken ct) => GetAsync<BackupEnvironmentsResponse>(Bk + "environments", ct);
+    public Task<BackupQuota> BackupQuotaAsync(string? subscriptionId, CancellationToken ct) => GetAsync<BackupQuota>(Bk + "quota" + (string.IsNullOrEmpty(subscriptionId) ? "" : "?subscriptionId=" + E(subscriptionId)), ct);
+    public Task<BackupPolicyResponse> BackupPolicyAsync(string deviceId, CancellationToken ct) => GetAsync<BackupPolicyResponse>(Bk + $"environments/{E(deviceId)}/policy", ct);
+    public Task<JsonElement> SaveBackupPolicyAsync(string deviceId, object settings, CancellationToken ct) => SendAsync<JsonElement>(HttpMethod.Put, Bk + $"environments/{E(deviceId)}/policy", new { settings }, ct);
+    public Task<SourceBrowseResponse> BrowseBackupSourceAsync(string deviceId, string? path, string? subscriptionId, CancellationToken ct) =>
+        GetAsync<SourceBrowseResponse>(Bk + $"environments/{E(deviceId)}/browse-source?" + (string.IsNullOrEmpty(path) ? "" : "path=" + E(path) + "&") + (string.IsNullOrEmpty(subscriptionId) ? "" : "subscriptionId=" + E(subscriptionId)), ct);
+    public Task<JsonElement> RunDeviceBackupAsync(string deviceId, CancellationToken ct) => SendAsync<JsonElement>(HttpMethod.Post, Bk + $"environments/{E(deviceId)}/run", new { }, ct);
+    public Task<JsonElement> PauseBackupAsync(string deviceId, bool pause, string? note, CancellationToken ct) => SendAsync<JsonElement>(HttpMethod.Post, Bk + $"environments/{E(deviceId)}/{(pause ? "pause" : "resume")}", new { note }, ct);
+    public Task<BackupJobsResponse> BackupJobsAsync(int limit, CancellationToken ct) => GetAsync<BackupJobsResponse>(Bk + $"jobs?limit={limit}", ct);
+    public Task<BackupJobDetail> BackupJobAsync(string jobId, CancellationToken ct) => GetAsync<BackupJobDetail>(Bk + $"jobs/{E(jobId)}", ct);
+    public Task<JsonElement> CancelBackupJobAsync(string jobId, CancellationToken ct) => SendAsync<JsonElement>(HttpMethod.Post, Bk + $"jobs/{E(jobId)}/cancel", new { note = "Stopped from the CloudOrc panel" }, ct);
+    public Task<RecoveryPointsResponse> RecoveryPointsAsync(int limit, CancellationToken ct) => GetAsync<RecoveryPointsResponse>(Bk + $"recovery-points?limit={limit}", ct);
+    public Task<RecoveryRootsResponse> RecoveryRootsAsync(string rpId, CancellationToken ct) => GetAsync<RecoveryRootsResponse>(Bk + $"recovery-points/{E(rpId)}/roots", ct);
+    public Task<RecoveryBrowseResponse> BrowseRecoveryAsync(string rpId, string root, string? path, CancellationToken ct) =>
+        GetAsync<RecoveryBrowseResponse>(Bk + $"recovery-points/{E(rpId)}/browse?root={E(root)}" + (string.IsNullOrEmpty(path) ? "" : "&path=" + E(path)), ct);
+    public Task<RecoveryBrowseResponse> SearchRecoveryAsync(string rpId, string q, CancellationToken ct) => GetAsync<RecoveryBrowseResponse>(Bk + $"recovery-points/{E(rpId)}/search?q={E(q)}", ct);
+    public Task<RestoreRow> RequestRestoreAsync(string rpId, object body, CancellationToken ct) => SendAsync<RestoreRow>(HttpMethod.Post, Bk + $"recovery-points/{E(rpId)}/restore", body, ct);
+    public Task<RestoresResponse> RestoresAsync(CancellationToken ct) => GetAsync<RestoresResponse>(Bk + "restores", ct);
+
     public Task<SupportCategories> GetSupportCategoriesAsync(CancellationToken ct) => GetAsync<SupportCategories>("support/categories", ct);
     public Task<TicketResult> CreateTicketAsync(object body, CancellationToken ct) => SendAsync<TicketResult>(HttpMethod.Post, "support/ticket", body, ct);
     public Task<AiAnswer> AskAiAsync(string message, string sessionId, CancellationToken ct) => SendAsync<AiAnswer>(HttpMethod.Post, "ai/ask", new { message, sessionId }, ct);

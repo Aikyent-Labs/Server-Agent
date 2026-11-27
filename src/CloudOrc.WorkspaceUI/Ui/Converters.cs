@@ -35,6 +35,7 @@ public sealed class ToneToBrushConverter : IValueConverter
             "ok" => "Ok",
             "warn" => "Warn",
             "bad" => "Bad",
+            "run" => "Accent",
             _ => "Muted"
         }) as Brush ?? Brushes.Gray;
 
@@ -48,6 +49,7 @@ public sealed class ToneToSoftBrushConverter : IValueConverter
         {
             "ok" => "OkSoft",
             "warn" => "WarnSoft",
+            "run" => "AccentSoft",
             "bad" => "BadSoft",
             _ => "SurfaceBg"
         }) as Brush ?? Brushes.WhiteSmoke;

@@ -43,11 +43,22 @@ public sealed class WorkspaceUiSupervisor(
 
         EnsureSharedDirectories();
         var interval = TimeSpan.FromSeconds(Math.Max(3, options.Value.CheckIntervalSeconds));
+        var lastTick = DateTimeOffset.MinValue;
+        var known = new HashSet<int>();
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                Tick();
+                // A user who just signed in must get the panel at once (before the TSPlus panel shows), not on
+                // the next 10 s cycle: look for new active sessions every second (cheap) and run a cycle then.
+                var active = sessions.GetUserSessions().Where(x => x.Active).Select(x => x.SessionId).ToHashSet();
+                var newSession = active.Any(id => !known.Contains(id));
+                known = active;
+                if (newSession || time.GetUtcNow() - lastTick >= interval)
+                {
+                    lastTick = time.GetUtcNow();
+                    Tick();
+                }
             }
             catch (Exception ex)
             {
@@ -56,7 +67,7 @@ public sealed class WorkspaceUiSupervisor(
 
             try
             {
-                await Task.Delay(interval, stoppingToken).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

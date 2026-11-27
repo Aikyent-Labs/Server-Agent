@@ -49,6 +49,12 @@ public sealed class TsplusPanelHider
 
     private readonly Dictionary<IntPtr, Original> _cloaked = [];
     private readonly object _sync = new();
+    private bool? _seamlessCache;
+
+    /// <summary>RemoteApp session? Cached: a session never changes kind, and each check walks every process on the server.</summary>
+    private bool Seamless => _seamlessCache ??= SessionActions.IsSeamlessSession();
+    /// <summary>One cloak / restore pass at a time (the instant-hide hook runs on its own thread).</summary>
+    private readonly object _gate = new();
     private readonly int _session = Process.GetCurrentProcess().SessionId;
 
     public bool Enabled { get; private set; }
@@ -64,20 +70,128 @@ public sealed class TsplusPanelHider
         Log.Write($"TSPlus floating panel hiding {(enabled ? "enabled" : "disabled")} by policy.");
         if (enabled)
         {
+            InstallShowHook();
             Apply();
         }
         else
         {
+            RemoveShowHook();
             RestoreAll();
             RecoverOrphans();
         }
     }
 
+    // ---- Instant cloak: a TSPlus panel window is hidden the moment Windows shows it (no timer wait), so the
+    // user never sees it flash at sign-in. Installed on the UI thread (it has the message loop it needs).
+
+    private const uint EVENT_OBJECT_CREATE = 0x8000, EVENT_OBJECT_DESTROY = 0x8001, EVENT_OBJECT_SHOW = 0x8002, EVENT_OBJECT_NAMECHANGE = 0x800C, WINEVENT_OUTOFCONTEXT = 0x0000, WINEVENT_SKIPOWNPROCESS = 0x0002;
+    private WinEventProc? _showProc;
+    private Thread? _hookThread;
+    private uint _hookThreadId;
+    /// <summary>pid -> matching target (process, title rule) or null when it is not a TSPlus panel process.</summary>
+    private readonly Dictionary<uint, (string Process, string? Title)?> _targetPid = [];
+
+    /// <summary>
+    /// The hook gets its own thread and message loop: at sign-in the panel's UI thread is busy building the
+    /// window, and a hook on it was delivered ~0.5 s late - long enough to see the TSPlus panel flash.
+    /// </summary>
+    private void InstallShowHook()
+    {
+        if (_hookThread is not null) return;
+        _showProc = OnObjectShown;
+        using var ready = new ManualResetEventSlim();
+        _hookThread = new Thread(() =>
+        {
+            _hookThreadId = GetCurrentThreadId();
+            // CREATE..SHOW: the TSPlus panel is made invisible as soon as its window exists, before it is first shown.
+            var show = SetWinEventHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_SHOW, IntPtr.Zero, _showProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            // TSPlus shows its .connect panel first and sets the "Remote App" title right after: catch that too.
+            var name = SetWinEventHook(EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_NAMECHANGE, IntPtr.Zero, _showProc, 0, 0, WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            ready.Set();
+            while (GetMessage(out var msg, IntPtr.Zero, 0, 0) > 0)
+            {
+                TranslateMessage(ref msg);
+                DispatchMessage(ref msg);
+            }
+
+            if (show != IntPtr.Zero) UnhookWinEvent(show);
+            if (name != IntPtr.Zero) UnhookWinEvent(name);
+        }) { IsBackground = true, Name = "CloudOrc TSPlus hide hook" };
+        _hookThread.Start();
+        ready.Wait(TimeSpan.FromSeconds(3));
+    }
+
+    private void RemoveShowHook()
+    {
+        if (_hookThread is null) return;
+        if (_hookThreadId != 0) PostThreadMessage(_hookThreadId, 0x0012 /* WM_QUIT */, IntPtr.Zero, IntPtr.Zero);
+        _hookThread = null;
+        _hookThreadId = 0;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSG { public IntPtr hwnd; public uint message; public IntPtr wParam; public IntPtr lParam; public uint time; public int x; public int y; }
+    [DllImport("user32.dll")] private static extern int GetMessage(out MSG msg, IntPtr hwnd, uint min, uint max);
+    [DllImport("user32.dll")] private static extern bool TranslateMessage(ref MSG msg);
+    [DllImport("user32.dll")] private static extern IntPtr DispatchMessage(ref MSG msg);
+    [DllImport("user32.dll")] private static extern bool PostThreadMessage(uint thread, uint msg, IntPtr w, IntPtr l);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentThreadId();
+
+    private void OnObjectShown(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
+    {
+        try
+        {
+            if (!Enabled || evt == EVENT_OBJECT_DESTROY || idObject != 0 || idChild != 0 || hwnd == IntPtr.Zero) return;
+            GetWindowThreadProcessId(hwnd, out var pid);
+            if (!_targetPid.TryGetValue(pid, out var target))
+            {
+                try
+                {
+                    using var p = Process.GetProcessById((int)pid);
+                    target = p.SessionId == _session
+                        ? Targets.Cast<(string Process, string? Title)?>().FirstOrDefault(t => string.Equals(t!.Value.Process, p.ProcessName, StringComparison.OrdinalIgnoreCase))
+                        : null;
+                }
+                catch (ArgumentException) { target = null; }
+                if (_targetPid.Count > 500) _targetPid.Clear();
+                _targetPid[pid] = target;
+            }
+
+            // Fast path: hide exactly this window now (a full Apply walks every process on the server: ~0.5 s).
+            if (target is { } t && IsTopLevel(hwnd) && TitleMatches(hwnd, t.Title) && (evt == EVENT_OBJECT_CREATE || IsWindowVisible(hwnd)))
+            {
+                lock (_gate)
+                {
+                    bool known;
+                    lock (_sync) known = _cloaked.ContainsKey(hwnd);
+                    if (Enabled && !known) Cloak(hwnd);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("tsplus show hook", ex);
+        }
+    }
+
+    private static bool IsTopLevel(IntPtr h) => GetAncestor(h, 1 /* GA_PARENT */) == GetDesktopWindow();
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr h, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetDesktopWindow();
+
+    private delegate void WinEventProc(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time);
+    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr hmod, WinEventProc proc, uint pid, uint tid, uint flags);
+    [DllImport("user32.dll")] private static extern bool UnhookWinEvent(IntPtr hook);
+
     /// <summary>Cloaks any (new) TSPlus panel window of this session. Cheap; called periodically.</summary>
     public void Apply()
     {
+        lock (_gate) ApplyCore();
+    }
+
+    private void ApplyCore()
+    {
         if (!Enabled) return;
-        var seamless = SessionActions.IsSeamlessSession();
+        var seamless = Seamless;
         var seen = 0;
         {
             foreach (var (p, title) in TargetProcesses())
@@ -150,6 +264,11 @@ public sealed class TsplusPanelHider
     /// <summary>Restores every window this panel cloaked (policy off / exit / crash).</summary>
     public void RestoreAll()
     {
+        lock (_gate) RestoreAllCore();
+    }
+
+    private void RestoreAllCore()
+    {
         KeyValuePair<IntPtr, Original>[] items;
         lock (_sync)
         {
@@ -186,6 +305,11 @@ public sealed class TsplusPanelHider
     /// (a hard kill cannot run <see cref="RestoreAll"/>). Called at start-up and when the policy is off.
     /// </summary>
     public int RecoverOrphans()
+    {
+        lock (_gate) return RecoverOrphansCore();
+    }
+
+    private int RecoverOrphansCore()
     {
         var fixedCount = 0;
         {
@@ -233,7 +357,7 @@ public sealed class TsplusPanelHider
             GetLayeredWindowAttributes(h, out key, out alpha, out flags);
         }
 
-        var shrink = SessionActions.IsSeamlessSession();
+        var shrink = Seamless;
         GetWindowRect(h, out var rect);
         lock (_sync) _cloaked[h] = new Original(ex, wasLayered, alpha, key, flags, rect.Right - rect.Left, rect.Bottom - rect.Top, shrink);
         SetWindowLongPtr(h, GWL_EXSTYLE, new IntPtr(ex | WS_EX_LAYERED | WS_EX_TRANSPARENT));
