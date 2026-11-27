@@ -334,6 +334,28 @@ foreach ($svc in @($WatchdogServiceName, $ControlAgentServiceName)) {
 }
 Start-Sleep -Seconds 2
 
+# A stopped service's process can take a while to exit, and the Tray / Backup Worker / Updater /
+# panel run from the same install folder - any of them keeps a DLL locked and the folder cannot be
+# replaced ("Access to the path 'CloudOrc.Agent.Contracts.dll' is denied"). Wait for them to exit,
+# then close what is still running from the install folder (the Watch restarts the panel).
+function Get-ProcessesInInstallRoot {
+    $rootPrefix = (Join-Path $InstallRoot "").ToLowerInvariant()
+    Get-Process -ErrorAction SilentlyContinue | Where-Object {
+        $p = $null
+        try { $p = $_.Path } catch { }
+        $p -and $p.ToLowerInvariant().StartsWith($rootPrefix)
+    }
+}
+$deadline = (Get-Date).AddSeconds(30)
+while ((Get-ProcessesInInstallRoot | Where-Object { $_.Name -in @("CloudOrc.ControlAgent", "CloudOrc.WatchdogAgent") }) -and (Get-Date) -lt $deadline) {
+    Start-Sleep -Milliseconds 500
+}
+foreach ($proc in @(Get-ProcessesInInstallRoot)) {
+    Write-Host "  Closing $($proc.Name) (pid $($proc.Id), session $($proc.SessionId)) so its files can be replaced."
+    try { Stop-Process -Id $proc.Id -Force -ErrorAction Stop } catch { Write-Host "  Could not close pid $($proc.Id): $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+Start-Sleep -Seconds 2
+
 # ----------------------------------------------------------------------------
 # 8. Preserve existing configuration (literal file preserve, not a merge),
 #    then deploy the new application files
@@ -361,7 +383,14 @@ function Deploy-Agent {
     $preservedConfig = Backup-ExistingConfig -InstallDir $TargetDir
 
     if (Test-Path $TargetDir) {
-        Remove-Item -Recurse -Force $TargetDir
+        # Retry: a file can stay locked for a moment after its process exits (or while antivirus scans it).
+        for ($attempt = 1; ; $attempt++) {
+            try { Remove-Item -Recurse -Force $TargetDir -ErrorAction Stop; break }
+            catch {
+                if ($attempt -ge 10) { throw }
+                Start-Sleep -Seconds 2
+            }
+        }
     }
     New-Item -ItemType Directory -Force -Path $TargetDir | Out-Null
     Copy-Item -Path (Join-Path $SourceDir "*") -Destination $TargetDir -Recurse -Force
